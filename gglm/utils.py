@@ -12,8 +12,9 @@ import ggml
 from ggml.utils import GGML_TYPE
 from gguf.gguf_reader import ReaderTensor, ReaderField
 from gguf.quants import quant_shape_from_byte_shape
+from gguf.constants import Keys as GGUFKeys
 
-from exo.inference.shard import Shard
+# from exo.inference.shard import Shard
 
 class Tensor:
     name: str
@@ -89,7 +90,7 @@ class ParseError(Exception):
 @dataclass(kw_only=True)
 class GGMLContextParams:
     """Stores parameters related to the current GGML execution context"""
-    shard: Optional[Shard]
+    # shard: Optional[Shard]
     n_threads: int
     n_batches: int
     n_ctx: int
@@ -173,10 +174,12 @@ class ModelParams:
     """Provides an interface for consistently accessing model parameters from a GGUF file"""
     def __init__(self, params: Dict[str, ReaderField]):
         self._data = params
-        self._prefix = str(params["general.architecture"].contents()) + "."
+        self._arch = str(params[GGUFKeys.General.ARCHITECTURE].contents())
 
     def __getitem__(self, key: str) -> str:
-        return str(self._data[self._prefix + key].contents())
+        if "{arch}" in key:
+            key = key.replace("{arch}", self._arch)
+        return self._data[key].contents()
     
     T = TypeVar('T')
     def get(self, key: str, default: T = None) -> str | T:
@@ -187,35 +190,35 @@ class ModelParams:
 
     @property
     def n_ctx(self) -> int:
-        return int(self["context_length"])
+        return int(self[GGUFKeys.LLM.CONTEXT_LENGTH])
     
     @property
     def n_embd(self) -> int:
-        return int(self["embedding_length"])
+        return int(self[GGUFKeys.LLM.EMBEDDING_LENGTH])
     
     @property
     def n_layer(self) -> int:
-        return int(self["block_count"])
+        return int(self[GGUFKeys.LLM.BLOCK_COUNT])
     
     @property
     def n_expert(self) -> int:
-        return int(self["expert_count"])
+        return int(self[GGUFKeys.LLM.EXPERT_COUNT])
     
     @property
     def n_expert_used(self) -> int:
-        return int(self["expert_used_count"])
+        return int(self[GGUFKeys.LLM.EXPERT_USED_COUNT])
     
     @property
     def n_ffn(self) -> int:
-        return int(self["feed_forward_length"])
+        return int(self[GGUFKeys.LLM.FEED_FORWARD_LENGTH])
     
     @property
     def n_head(self) -> int:
-        return int(self["attention.head_count"])
+        return int(self[GGUFKeys.Attention.HEAD_COUNT])
     
     @property
     def n_head_kv(self) -> int:
-        return int(self.get("attention.head_count_kv", self.n_head))
+        return int(self.get(GGUFKeys.Attention.HEAD_COUNT_KV, self.n_head))
     
     @property
     def n_embd_k_gqa(self) -> int:
@@ -227,43 +230,43 @@ class ModelParams:
     
     @property
     def rope_finetuned(self) -> bool:
-        return self.get("rope.scaling.finetuned") == "true"
+        return self.get(GGUFKeys.Rope.SCALING_FINETUNED) == "true"
     
     @property
     def rope_freq_base(self) -> float:
-        return float(self.get("rope.freq_base", 10000.0))
+        return float(self.get(GGUFKeys.Rope.FREQ_BASE, 10000.0))
     
     @property
     def rope_freq_scale(self) -> float:
-        return float(self.get("rope.scaling.factor", 1.0))
+        return float(self.get(GGUFKeys.Rope.SCALING_FACTOR, 1.0))
     
     @property
     def rope_scaling_type(self) -> str:
-        return self.get("rope.scaling.type", "linear")
+        return str(self.get(GGUFKeys.Rope.SCALING_TYPE, "linear"))
     
     @property
     def rope_attn_factor(self) -> float:
-        return float(self.get("rope.scaling.attn_factor", 1.0))
+        return float(self.get(GGUFKeys.Rope.SCALING_ATTN_FACTOR, 1.0))
     
     @property
     def n_embd_head_k(self) -> int:
-        return int(self.get("attention.key_length", self.n_embd // self.n_head))
+        return int(self.get(GGUFKeys.Attention.KEY_LENGTH, self.n_embd // self.n_head))
     
     @property
     def n_embd_head_v(self) -> int:
-        return int(self.get("attention.value_length", self.n_embd // self.n_head))
+        return int(self.get(GGUFKeys.Attention.VALUE_LENGTH, self.n_embd // self.n_head))
     
     @property
     def n_rot(self) -> int:
-        return int(self.get("rope.dimension_count", self.n_embd_head_k))
+        return int(self.get(GGUFKeys.Rope.DIMENSION_COUNT, self.n_embd_head_k))
     
     @property
     def n_vocab(self) -> int:
-        return int(self.get("vocab_size", len(self._data["tokenizer.ggml.tokens"].parts)))
+        return int(self.get(GGUFKeys.LLM.VOCAB_SIZE, len(self._data[GGUFKeys.Tokenizer.LIST].parts)))
     
     @property
     def f_norm_rms_eps(self) -> float:
-        return float(self["attention.layer_norm_rms_epsilon"])
+        return float(self[GGUFKeys.Attention.LAYERNORM_RMS_EPS])
 
     
     def to_default_ggml_context_params_dict(self) -> Dict[str, Any]:
@@ -272,7 +275,7 @@ class ModelParams:
             n_ctx=self.n_ctx,
             rope_freq_base=self.rope_freq_base,
             rope_freq_scale=self.rope_freq_scale,
-            rope_scaling_type=self.get("rope.scaling.type", 0),
+            rope_scaling_type=self.get(GGUFKeys.Rope.SCALING_TYPE, 0),
         )
     
 def ggml_tensor_size(shape: List[int], ggml_type: Optional[int] = None):
@@ -295,7 +298,7 @@ def ensure_args(function_name: str, args: List[Tensor | int | float | str | None
             raise ParseError(f"Error in function call '{function_name}'. Expected parameter {idx + 1} to be of type {expected_type.__name__}, but got {type(arg).__name__}", token)
 
 GGML_TYPE_TO_CTYPE = {
-    ggml.GGML_TYPE_F32: ctypes.c_uint32,
+    ggml.GGML_TYPE_F32: ctypes.c_float,
     ggml.GGML_TYPE_F16: ctypes.c_uint16,
     ggml.GGML_TYPE_I8: ctypes.c_int8,
     ggml.GGML_TYPE_I16: ctypes.c_int16,
@@ -322,28 +325,25 @@ def create_tensor_from_gguf_shape(shape: List[int], ctx: ggml.ggml_context_p, te
 
 
 def set_tensor_from_numpy(x: npt.NDArray[Any], tensor: Tensor) -> None:
-    """Create a new ggml tensor with data copied from a numpy array. The provided tensor is updated to contain the pointer to the GGML tensor"""
+    """Copy data from a numpy array to a tensor"""
     if ggml.ggml_get_data(tensor.ptr):
-        n_elements = ggml.ggml_nelements(tensor.ptr)
-    
-        if tensor.type in GGML_TYPE_TO_CTYPE:
-            ctypes_type = GGML_TYPE_TO_CTYPE[tensor.type]
-        else:
-            ctypes_type = ctypes.c_byte
-            n_elements = functools.reduce(lambda x, y: x * y, x.shape)
-
-        n_bytes = n_elements * ctypes.sizeof(ctypes_type)
-
+        n_bytes = ggml.ggml_nbytes(tensor.ptr)
         ggml.ggml_backend_tensor_set(tensor.ptr, x.ctypes.data_as(ctypes.c_void_p), 0, n_bytes)
     else:
         raise ValueError("Tensor data is None")
     
 
 def get_tensor_to_numpy(tensor: Tensor) -> npt.NDArray[Any]:
-    n_elements = ggml.ggml_nelements(tensor.ptr)
+    """Retrieve data from a tensor and convert it to a numpy array"""
     n_bytes = ggml.ggml_nbytes(tensor.ptr)
-    result_buffer = (GGML_TYPE_TO_CTYPE[GGML_TYPE(tensor.type)] * n_elements)()
+    n_dims = ggml.ggml_n_dims(tensor.ptr)
+    shape = tensor.shape[:n_dims]
 
+    result_buffer_type = GGML_TYPE_TO_CTYPE[GGML_TYPE(tensor.type)]
+    for dim in list(reversed(shape)):
+        result_buffer_type *= dim
+
+    result_buffer = result_buffer_type()
     ggml.ggml_backend_tensor_get(tensor.ptr, result_buffer, 0, n_bytes)
 
-    return np.ctypeslib.as_array(result_buffer, list(reversed(tensor.shape)))
+    return np.ctypeslib.as_array(result_buffer, list(reversed(shape)))

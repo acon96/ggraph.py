@@ -24,7 +24,7 @@ def sample_from_logits(logits: np.ndarray, *, temperature: float, top_p: float, 
     return np.random.choice(len(probs), p=probs)
 
 n_ctx = 256
-model = GGMLModel(gguf_path, None, n_ctx=n_ctx)
+model = GGMLModel(gguf_path, n_ctx=n_ctx)
 model._build_forward()
 
 tokenizer: Qwen2TokenizerFast = Qwen2TokenizerFast.from_pretrained("Qwen/Qwen-tokenizer")
@@ -55,7 +55,7 @@ try:
             kq_mask=causal_mask(n_ctx=n_ctx),
         )
 
-        print(np.std(get_tensor_to_numpy(look_up_tensor("get_rows_aa2b"))))
+        # print(get_tensor_to_numpy(look_up_tensor("get_rows_aa2b")))
 
         output_pos = len(input_ids)
         logits = result.reshape(n_ctx, -1)[output_pos]

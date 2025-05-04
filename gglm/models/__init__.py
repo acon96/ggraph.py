@@ -14,7 +14,7 @@ from gglm.utils import Tensor, ModelParams, GGMLContextParams, ParseError, creat
 from gglm.models.parser import GGMLParser
 from gglm.models.ast import produce_ggml_graph
 
-from exo.inference.shard import Shard
+# from exo.inference.shard import Shard
 
 class GGMLBackendType(enum.Enum):
     CPU = enum.auto()
@@ -33,8 +33,8 @@ class GGMLModel:
     ctx0: Optional[ggml.ggml_context_p]
     compute_graph: Optional[ggml.ggml_cgraph_p]
 
-    def __init__(self, model_path: str, shard: Optional[Shard], backend_type: GGMLBackendType = GGMLBackendType.CPU, **model_kwargs):
-        self.shard = shard
+    def __init__(self, model_path: str, backend_type: GGMLBackendType = GGMLBackendType.CPU, **model_kwargs):
+        # self.shard = shard
         self.reader = GGUFReader(model_path, mode="r")
         self.backend_type = backend_type
 
@@ -42,7 +42,7 @@ class GGMLModel:
         self.model_params = ModelParams(gguf_kv)
         params =  self.model_params.to_default_ggml_context_params_dict()
         params.update(dict(
-            shard=shard,
+            # shard=shard,
             n_threads=4,
             n_batches=1,
             enable_flash_attn=False,
