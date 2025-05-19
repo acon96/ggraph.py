@@ -6,13 +6,12 @@ import logging
 import ctypes
 
 import numpy as np
-import ggml
-from ggml.utils import to_numpy, GGML_TYPE, GGML_TYPE_TO_NUMPY_DTYPE
 from gguf.gguf_reader import GGUFReader
 
-from gglm.utils import Tensor, ModelParams, GGMLContextParams, ParseError, create_tensor_from_gguf_shape, set_tensor_from_numpy, get_tensor_to_numpy, ggml_tensor_size
+from gglm.utils import Tensor, ModelParams, GGMLContextParams, ParseError
 from gglm.models.parser import GGMLParser
 from gglm.models.ast import produce_ggml_graph
+from gglm.wrapper import ggml_context_p, ggml_cgraph_p, ggml_init_params, ggml_cgraph, ggml_tensor, gen
 
 # from exo.inference.shard import Shard
 
@@ -20,6 +19,14 @@ class GGMLBackendType(enum.Enum):
     CPU = enum.auto()
     CUDA = enum.auto()
     VULKAN = enum.auto()
+
+GGML_TYPE_TO_NUMPY_DTYPE = {
+    gen.GGML_TYPE_F16: np.float16,
+    gen.GGML_TYPE_F32: np.float32,
+    gen.GGML_TYPE_I8: np.int8,
+    gen.GGML_TYPE_I16: np.int16,
+    gen.GGML_TYPE_I32: np.int32
+}
 
 class GGMLModel:
     """The base class for defining GGML model compute graphs and context buffers"""
@@ -30,8 +37,8 @@ class GGMLModel:
     loaded_tensors: Dict[str, Tensor]
     created_tensors: Dict[str, Tensor]
     input_tensors: Dict[str, Tensor]
-    ctx0: Optional[ggml.ggml_context_p]
-    compute_graph: Optional[ggml.ggml_cgraph_p]
+    ctx0: Optional[ggml_context_p]
+    compute_graph: Optional[ggml_cgraph_p]
 
     def __init__(self, model_path: str, backend_type: GGMLBackendType = GGMLBackendType.CPU, **model_kwargs):
         # self.shard = shard
@@ -40,7 +47,7 @@ class GGMLModel:
 
         gguf_kv = dict(**self.reader.fields)
         self.model_params = ModelParams(gguf_kv)
-        params =  self.model_params.to_default_ggml_context_params_dict()
+        params = self.model_params.to_default_ggml_context_params_dict()
         params.update(dict(
             # shard=shard,
             n_threads=4,
@@ -50,8 +57,8 @@ class GGMLModel:
             yarn_attn_factor=1.0,
             yarn_beta_fast=32.0,
             yarn_beta_slow=1.0,
-            type_k=ggml.GGML_TYPE_F16,
-            type_v=ggml.GGML_TYPE_F16,
+            type_k=gen.GGML_TYPE_F16,
+            type_v=gen.GGML_TYPE_F16,
         ))
         params.update(model_kwargs)
         self.context_params = GGMLContextParams(**params)
@@ -85,38 +92,38 @@ class GGMLModel:
 
         model_bytes = 0
         for tensor in tensors_to_load:
-            model_bytes += ggml_tensor_size([tensor.n_bytes])
+            model_bytes += tensor.n_bytes_ctx
 
         context_bytes = 0
         for tensor in tensors_to_create:
-            context_bytes += ggml_tensor_size(tensor.shape, tensor.type)
+            context_bytes += tensor.n_bytes_ctx
 
         for tensor in intermediate_tensors:
             if tensor.is_view:
                 continue
-            context_bytes += ggml_tensor_size(tensor.shape, tensor.type)
+            context_bytes += tensor.n_bytes_ctx
 
         num_tensors = len(tensors_to_load) + len(tensors_to_create) + len(intermediate_tensors)
-        graph_bytes = ggml.ggml_graph_overhead_custom(num_tensors * 5, False) + ggml.ggml_tensor_overhead() * num_tensors
+        graph_bytes = gen.ggml_graph_overhead_custom(num_tensors * 5, False) + gen.ggml_tensor_overhead() * num_tensors
         
         return model_bytes + context_bytes + graph_bytes
 
     def _init_ggml_ctx(self, size: int):
-        init_params = ggml.ggml_init_params(mem_size=size, mem_buffer=None, no_alloc=True)
-        self.ctx0 = ggml.ggml_init(init_params)
+        init_params = ggml_init_params(mem_size=size, mem_buffer=None, no_alloc=True)
+        self.ctx0 = gen.ggml_init(init_params)
 
         if not self.ctx0:
             raise ValueError("Failed to initialize GGML!")
         
         match self.backend_type:
             case GGMLBackendType.CPU:
-                self.backend = ggml.ggml_backend_cpu_init()
+                self.backend = gen.ggml_backend_cpu_init()
             case GGMLBackendType.CUDA:
                 try:
-                    num_gpus = ggml.ggml_backend_cuda_get_device_count()
+                    num_gpus = gen.ggml_backend_cuda_get_device_count()
                     if num_gpus == 0:
                         raise RuntimeError("Cannot use CUDA backend. No NVIDIA GPUs were detected!")
-                    self.backend = ggml.ggml_backend_cuda_init(0)
+                    self.backend = gen.ggml_backend_cuda_init(0)
                 except RuntimeError:
                     raise RuntimeError("This copy of ggml-py was not built with CUDA support!")
             case _:
@@ -124,18 +131,7 @@ class GGMLModel:
 
         if not self.backend:
             raise RuntimeError("Failed to initialize backend!")
-
-    def _create_tensor_from_gguf(self, tensor: Tensor):
-        if not self.ctx0:
-            raise ValueError("Context is not initialized yet! Cannot create tensor.")
         
-        reader_tensors = [x for x in self.reader.tensors if x.name == tensor.name]
-        if not reader_tensors:
-            raise ValueError(f"Tensor {tensor.name} not found in GGUF file!")
-
-        np_tensor = reader_tensors[0].data
-        create_tensor_from_gguf_shape(np_tensor.shape, self.ctx0, tensor)
-        self.loaded_tensors[tensor.name] = tensor
     
     def _load_tensor_from_gguf(self, tensor: Tensor):
         logging.debug(f"Loading Tensor - name: {tensor.name}, shape: {tensor.shape}, type: {tensor.ptr.contents.type}")
@@ -147,9 +143,9 @@ class GGMLModel:
             raise ValueError(f"Tensor {tensor.name} not found in GGUF file!")
 
         np_tensor = reader_tensors[0].data
-        set_tensor_from_numpy(np_tensor, tensor)
+        logging.debug(f"{np_tensor.dtype}, {np_tensor.shape=}")
+        tensor.data = np_tensor
 
-    
     def _create_empty_tensor(self, tensor: Tensor):
         if not self.ctx0:
             raise ValueError("Context is not initialized yet! Cannot create tensor.")
@@ -157,34 +153,43 @@ class GGMLModel:
         n_dims = len(tensor.shape)
         tensor_name = tensor.name
 
-        tensor_ptr = ggml.ggml_new_tensor(self.ctx0, tensor.type, n_dims, (ctypes.c_int64 * n_dims)(*tensor.shape))
-        ggml.ggml_set_name(tensor_ptr, tensor_name.encode())
+        tensor_ptr = gen.ggml_new_tensor(self.ctx0, tensor.type, n_dims, (ctypes.c_int64 * n_dims)(*tensor.shape))
+        gen.ggml_set_name(tensor_ptr, tensor_name.encode())
 
         tensor.ptr = tensor_ptr
-        self.created_tensors[tensor_name] = tensor
+
+        if tensor.is_loaded:
+            self.loaded_tensors[tensor_name] = tensor
+        else:
+            self.created_tensors[tensor_name] = tensor
 
         if tensor.is_input:
-            ggml.ggml_set_input(tensor_ptr)
+            gen.ggml_set_input(tensor_ptr)
             self.input_tensors[tensor_name] = tensor
 
         return tensor
 
     def _setup_tensors(self) -> None:
-        """Load the required tensors in memory. If a shard is provided, only load the desired layers"""
+        """Load the required tensors in memory. TODO: If a shard was provided, only load the desired layers"""
         if not self.backend:
             raise RuntimeError("Cannot set up tensors. Backend is not initialized")
 
+        tensors_to_load: list[Tensor] = []
         for tensor in self.parse_context.gguf_tensors.values():
             if tensor.name not in self.loaded_tensors:
-                self._create_tensor_from_gguf(tensor)
+                self._create_empty_tensor(tensor)
+                tensors_to_load.append(tensor)
 
         for tensor in self.parse_context.created_tensors:
             if tensor.name not in self.created_tensors:
                 self._create_empty_tensor(tensor)
 
-        self.inputs_buffer = ggml.ggml_backend_alloc_ctx_tensors(self.ctx, self.backend)
+        self.inputs_buffer = gen.ggml_backend_alloc_ctx_tensors(self.ctx, self.backend)
+        if not self.inputs_buffer:
+            raise RuntimeError("Failed to allocate buffer to store inputs!")
+        gen.ggml_backend_buffer_clear(self.inputs_buffer, 0)
 
-        for tensor in self.loaded_tensors.values():
+        for tensor in tensors_to_load:
             self._load_tensor_from_gguf(tensor)
 
     def _build_forward(self):
@@ -192,12 +197,13 @@ class GGMLModel:
         logging.debug("Loading tensors...")
         self._setup_tensors()
 
-        logging.debug("Creating GGML graph...")
-        gf = ggml.ggml_new_graph_custom(self.ctx, len(self.loaded_tensors) * 5, False)
+        graph_size = (len(self.loaded_tensors) + len(self.created_tensors)) * 5
+        logging.debug(f"Creating GGML graph with {graph_size} nodes...")
+        gf = gen.ggml_new_graph_custom(self.ctx, graph_size, False)
 
         try:
             for node in self.parse_context.ast:
-                produce_ggml_graph(self.ctx, node)
+                produce_ggml_graph(self.ctx, gf, node)
         except ParseError as exception:
             raise RuntimeError("Failed to parse") from exception
 
@@ -205,13 +211,15 @@ class GGMLModel:
         if not output_tensor:
             raise ValueError("Output tensor not found in the graph.")
         
-        ggml.ggml_set_name(output_tensor.ptr, b"result_output")
-        ggml.ggml_build_forward_expand(gf, output_tensor.ptr)
-        ggml.ggml_graph_dump_dot(gf, ctypes.POINTER(ggml.ggml_cgraph)(), b"graph.dot")
+        gen.ggml_set_name(output_tensor.ptr, b"result_output")
+        
+        logging.debug("Expanding graph...")
+        gen.ggml_build_forward_expand(gf, output_tensor.ptr)
+        gen.ggml_graph_dump_dot(gf, ctypes.POINTER(ggml_cgraph)(), b"graph.dot")
 
         self.compute_graph = gf
     
-    def __call__(self, **kwargs: List[Any]):
+    def __call__(self, **kwargs: List[int | float]):
         """Run the GGML model with the provided input tensors"""
         if not self.compute_graph:
             self._build_forward()
@@ -221,41 +229,37 @@ class GGMLModel:
 
         for input_name in kwargs.keys():
             input_tensor = self.input_tensors[input_name]
+            input_dtype = GGML_TYPE_TO_NUMPY_DTYPE[input_tensor.type]
 
-            set_tensor_from_numpy(
-                np.array(kwargs[input_name], dtype=GGML_TYPE_TO_NUMPY_DTYPE[GGML_TYPE(input_tensor.type)]),
-                input_tensor
-            )
+            input_tensor.data = np.array(kwargs[input_name], dtype=input_dtype)
 
-        backend_buffer_type = ggml.ggml_backend_get_default_buffer_type(self.backend)
+        backend_buffer_type = gen.ggml_backend_get_default_buffer_type(self.backend)
         if not backend_buffer_type:
             raise RuntimeError()
         
-        allocr = ggml.ggml_gallocr_new(backend_buffer_type)
+        allocr = gen.ggml_gallocr_new(backend_buffer_type)
         if not allocr:
             raise RuntimeError()
         
-        ggml.ggml_gallocr_alloc_graph(allocr, self.compute_graph)
+        gen.ggml_gallocr_alloc_graph(allocr, self.compute_graph)
 
         if self.backend_type == GGMLBackendType.CPU.value:
-            ggml.ggml_backend_cpu_set_n_threads(self.backend, 8)
+            gen.ggml_backend_cpu_set_n_threads(self.backend, 8)
 
-        ggml.ggml_backend_graph_compute(self.backend, self.compute_graph)
+        gen.ggml_backend_graph_compute(self.backend, self.compute_graph)
 
-        output_ptr = ggml.ggml_graph_get_tensor(self.compute_graph, b"result_output")
-        assert output_ptr is not None
-        assert output_ptr.contents is not None
+        output_ptr = gen.ggml_graph_get_tensor(self.compute_graph, b"result_output")
+        assert output_ptr != ctypes.POINTER(ggml_tensor)()
 
         output = Tensor.from_tensor_ptr("result_output", output_ptr)
-        logprobs = get_tensor_to_numpy(output)
-        logprobs = logprobs.reshape(
-            -1, logprobs.shape[0]
+        logprobs = output.data.reshape(
+            -1, output.data.shape[0]
         ).copy()
 
         return logprobs
     
     @property
-    def ctx(self) -> ggml.ggml_context_p:
+    def ctx(self) -> ggml_context_p:
         if not self.ctx0:
             raise ValueError("Context is not initialized yet! Cannot create tensor.")
         return self.ctx0

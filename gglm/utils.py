@@ -4,15 +4,20 @@ from typing import Optional, Dict, List, Union, TypeAlias, Any, TypeVar
 from dataclasses import dataclass, field
 import functools
 import ctypes
+import logging
 
+import matplotlib
+import matplotlib.pyplot as plt
 from lark import Token
 import numpy as np
 import numpy.typing as npt
-import ggml
-from ggml.utils import GGML_TYPE
 from gguf.gguf_reader import ReaderTensor, ReaderField
-from gguf.quants import quant_shape_from_byte_shape
 from gguf.constants import Keys as GGUFKeys
+
+from gglm import wrapper
+from gglm.wrapper import gen
+
+matplotlib.use("agg")
 
 # from exo.inference.shard import Shard
 
@@ -22,31 +27,58 @@ class Tensor:
     shape: List[int]
     is_input: bool
     is_view: bool
-    ptr: Optional[ggml.ggml_tensor_p]
+    is_loaded: bool
+    is_cache: bool
+    _ptr: Optional[wrapper.ggml_tensor_p]
 
     def __init__(self, *, 
                  name: str, type: int, shape: List[int],
-                 is_input: bool = False, is_view: bool = False, 
-                 ptr: Optional[ggml.ggml_tensor_p] = None):
+                 is_input: bool = False, is_view: bool = False,
+                 is_loaded: bool = False, is_cache: bool = False,
+                 ptr: Optional[wrapper.ggml_tensor_p] = None):
         self.name = name
         self.type = type
         self.shape = ([int(x) for x in shape] + [1, 1, 1, 1])[:4]
         self.is_input = is_input
         self.is_view = is_view
-        self.ptr = ptr
-
-    @property
-    def n_bytes(self) -> int:
-        size = ggml.ggml_type_size(self.type)
-        for dim in self.shape:
-            size *= dim
-        return size
+        self.is_loaded = is_loaded
+        self.is_cache = is_cache
+        self._ptr = ptr
     
     def __str__(self):
         return f"{self.__class__.__name__}(name={self.name}, shape={self.shape}, type={self.type})"
     
     def __repr__(self):
         return str(self)
+    
+    @property
+    def n_bytes(self) -> int:
+        size = gen.ggml_type_size(self.type)
+        for dim in self.shape:
+            size *= dim
+        return size
+    
+    @property
+    def n_bytes_ctx(self) -> int:
+        return ggml_tensor_size(self.shape, self.type)
+    
+    @property
+    def ptr(self) -> wrapper.ggml_tensor_p:
+        if self._ptr is None:
+            raise ValueError("Attempt to access ptr of a tensor that is not loaded")
+        return self._ptr
+    
+    @ptr.setter
+    def ptr(self, new_value: wrapper.ggml_tensor_p):
+        self._ptr = new_value
+    
+    @property
+    def data(self):
+        return get_tensor_to_numpy(self)
+    
+    @data.setter
+    def data(self, new_value):
+        set_tensor_from_numpy(new_value, self)
     
     @classmethod
     def from_reader_tensor(cls, reader_tensor: ReaderTensor) -> Tensor:
@@ -55,17 +87,20 @@ class Tensor:
             type=reader_tensor.tensor_type.value,
             shape=reader_tensor.shape,
             is_input=False,
+            is_loaded=True,
         )
     
     @classmethod
-    def from_tensor_ptr(cls, name: str, ptr: ggml.ggml_tensor_p) -> Tensor:
+    def from_tensor_ptr(cls, name: str, ptr: wrapper.ggml_tensor_p | None) -> Tensor:
+        if ptr is None:
+            raise ValueError("Attempt to create tensor from null pointer")
         return cls(
             name=name,
             type=ptr.contents.type,
             shape=list(ptr.contents.ne),
             is_input=False,
             ptr=ptr,
-            is_view=(ptr.contents.view_src != ctypes.POINTER(ggml.ggml_tensor)())
+            is_view=(ptr.contents.view_src != ctypes.POINTER(wrapper.ggml_tensor)())
         )
 
 class ParseError(Exception):
@@ -117,7 +152,8 @@ class ParseContext:
     gguf_tensors: Dict[str, Tensor] = field(default_factory=lambda: {})
     graph: Dict[str, Tensor] = field(default_factory=lambda: {})
     ast: List[ASTNode] = field(default_factory=lambda: [])
-    cur_layer: Optional[int] = None
+    repeat_index: Optional[int] = None
+    repeat_var_name: Optional[str] = None
 
 class ASTNode:
     """
@@ -138,6 +174,9 @@ class ASTNode:
             elif name.startswith("params.model."):
                 return getattr(self.ctx.model_params, name[len("params.model."):])
             
+        if name == self.ctx.repeat_var_name:
+            return self.ctx.repeat_index
+            
         try:
             return int(name)
         except ValueError:
@@ -155,7 +194,7 @@ class ASTNode:
     
     def resolve_tensor(self, name: str, *, raise_error: bool = True) -> Optional[Tensor]:
         if "%d" in name:
-            name = name % self.ctx.cur_layer
+            name = name % self.ctx.repeat_index
         
         if name in self.ctx.graph:
             return self.ctx.graph[name]
@@ -165,6 +204,8 @@ class ASTNode:
 
         if raise_error:
             raise ParseError(f"Unknown tensor {name}", self.source_token)
+        
+        # logging.debug(f"Attempted to resolve unknown tensor {name}; graph tensors = {self.ctx.graph.keys()}")
         
         return None
 
@@ -279,10 +320,10 @@ class ModelParams:
         )
     
 def ggml_tensor_size(shape: List[int], ggml_type: Optional[int] = None):
-    tensor_overhead = ggml.ggml_tensor_overhead()
+    tensor_overhead = gen.ggml_tensor_overhead()
 
     if ggml_type:
-        element_size = ggml.ggml_type_size(ggml_type)
+        element_size = gen.ggml_type_size(ggml_type)
     else:
         element_size = 1
 
@@ -298,52 +339,84 @@ def ensure_args(function_name: str, args: List[Tensor | int | float | str | None
             raise ParseError(f"Error in function call '{function_name}'. Expected parameter {idx + 1} to be of type {expected_type.__name__}, but got {type(arg).__name__}", token)
 
 GGML_TYPE_TO_CTYPE = {
-    ggml.GGML_TYPE_F32: ctypes.c_float,
-    ggml.GGML_TYPE_F16: ctypes.c_uint16,
-    ggml.GGML_TYPE_I8: ctypes.c_int8,
-    ggml.GGML_TYPE_I16: ctypes.c_int16,
-    ggml.GGML_TYPE_I32: ctypes.c_int32
+    gen.GGML_TYPE_F32: ctypes.c_float,
+    gen.GGML_TYPE_I8: ctypes.c_int8,
+    gen.GGML_TYPE_I16: ctypes.c_int16,
+    gen.GGML_TYPE_I32: ctypes.c_int32
 }
-
-def create_tensor_from_gguf_shape(shape: List[int], ctx: ggml.ggml_context_p, tensor: Tensor) -> None:
-    """Create a new ggml tensor with data copied from a numpy array. The provided tensor is updated to contain the pointer to the GGML tensor"""
-    if tensor.type in GGML_TYPE_TO_CTYPE:
-        shape = list(reversed(shape))
-    else:
-        shape = list(reversed(quant_shape_from_byte_shape(shape, tensor.type)))
-        tensor.shape = (shape + [1, 1, 1, 1])[:4]
-        
-    tensor_ptr = ggml.ggml_new_tensor(
-        ctx,
-        tensor.type,
-        len(shape),
-        (ctypes.c_int64 * len(shape))(*shape),
-    )
-
-    ggml.ggml_set_name(tensor_ptr, tensor.name.encode())
-    tensor.ptr = tensor_ptr
-
 
 def set_tensor_from_numpy(x: npt.NDArray[Any], tensor: Tensor) -> None:
     """Copy data from a numpy array to a tensor"""
-    if ggml.ggml_get_data(tensor.ptr):
-        n_bytes = ggml.ggml_nbytes(tensor.ptr)
-        ggml.ggml_backend_tensor_set(tensor.ptr, x.ctypes.data_as(ctypes.c_void_p), 0, n_bytes)
+    if gen.ggml_get_data(tensor.ptr):
+        n_bytes = gen.ggml_nbytes(tensor.ptr)
+        src_ptr = x.ctypes.data_as(ctypes.c_void_p)
+        gen.ggml_backend_tensor_set(tensor.ptr, src_ptr, 0, n_bytes)
     else:
         raise ValueError("Tensor data is None")
     
 
 def get_tensor_to_numpy(tensor: Tensor) -> npt.NDArray[Any]:
     """Retrieve data from a tensor and convert it to a numpy array"""
-    n_bytes = ggml.ggml_nbytes(tensor.ptr)
-    n_dims = ggml.ggml_n_dims(tensor.ptr)
+    n_bytes = gen.ggml_nbytes(tensor.ptr)
+    n_dims = gen.ggml_n_dims(tensor.ptr)
     shape = tensor.shape[:n_dims]
 
-    result_buffer_type = GGML_TYPE_TO_CTYPE[GGML_TYPE(tensor.type)]
-    for dim in list(reversed(shape)):
-        result_buffer_type *= dim
+    n_elems = 1
+    for n in shape:
+        n_elems *= n
 
-    result_buffer = result_buffer_type()
-    ggml.ggml_backend_tensor_get(tensor.ptr, result_buffer, 0, n_bytes)
+    result_buffer_type = GGML_TYPE_TO_CTYPE.get(tensor.type)
+    if result_buffer_type:
+        result_buffer = (result_buffer_type * n_elems)()
+        gen.ggml_backend_tensor_get(tensor.ptr, result_buffer, 0, n_bytes)
+    else:
+        quantized_buffer = (ctypes.c_ubyte * n_bytes)()
+        result_buffer = (ctypes.c_float * n_elems)()
+        gen.ggml_backend_tensor_get(tensor.ptr, ctypes.cast(quantized_buffer, ctypes.c_void_p), 0, n_bytes)
 
-    return np.ctypeslib.as_array(result_buffer, list(reversed(shape)))
+        if tensor.type == gen.GGML_TYPE_F16:
+            gen.ggml_fp16_to_fp32_row(
+                ctypes.cast(quantized_buffer, ctypes.POINTER(gen.ggml_fp16_t)),
+                ctypes.cast(result_buffer, ctypes.POINTER(ctypes.c_float)),
+                n_elems
+            )
+        elif gen.ggml_is_quantized(tensor.type):
+            quantized_type = gen.ggml_get_type_traits(tensor.type)
+            quantized_type.to_float(
+                ctypes.cast(quantized_buffer, ctypes.c_void_p),
+                ctypes.cast(result_buffer, ctypes.POINTER(ctypes.c_float)),
+                n_elems
+            )
+        else:
+            raise ValueError(f"Unsupported tensor type: {tensor.type}")
+
+    return np.ctypeslib.as_array(result_buffer).reshape(list(reversed(shape)))
+
+
+def plot_logprob_heatmap(logprobs):
+    plt.figure(figsize=(12, 6), dpi=300)
+    plt.imshow(logprobs.T, aspect='auto', interpolation='nearest', cmap='viridis')
+    # plt.matshow(logprobs.T)
+    plt.colorbar(label='Logprob')
+    plt.xlabel('Token Index')
+    plt.ylabel('Vocab Index')
+    plt.title('Logprob Heatmap')
+    plt.tight_layout()
+    plt.savefig('logprobs.png')
+
+def plot_attention_heatmap(attn_weights: np.ndarray, layer):
+    # avg_attn = np.mean(attn_weights, axis=0)  # average over heads, shape: (seq_len, seq_len)
+    # avg_attn = np.reshape(attn_weights, (attn_weights.shape[0], attn_weights.shape[1] * attn_weights.shape[2]))
+
+    num_heads = attn_weights.shape[0]
+
+    fig, axes = plt.subplots(1, num_heads, figsize=(5 * num_heads, 5))
+    for head_idx in range(num_heads):
+        ax = axes[head_idx] if num_heads > 1 else axes
+        im = ax.imshow(attn_weights[head_idx], cmap='Blues', interpolation='nearest')
+        ax.set_title(f'Head {head_idx} - Layer {layer}')
+        ax.set_xlabel('Key Position')
+        ax.set_ylabel('Query Position')
+        fig.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
+    plt.tight_layout()
+    plt.savefig(f'attention_{layer:02}.png')

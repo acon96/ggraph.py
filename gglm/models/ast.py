@@ -6,11 +6,13 @@ import logging
 import hashlib
 
 from lark import Token
-import ggml
 
 from gglm.utils import Tensor, ASTNode, ensure_args
 from gglm.models.parser import ParseContext, ParseError
 import gglm.wrapper as wrapper
+import gglm.wrapper.marshall as marshall
+from gglm.wrapper import gen
+
 
 class Operation(Enum):
     VALUE = "value"
@@ -166,11 +168,13 @@ class Assignment(ASTNode):
 
 class RepeatBlock(ASTNode):
     count: Expression
+    count_variable: str
     statements: List[ASTNode]
 
-    def __init__(self, source_token: Token, ctx: ParseContext, count: Expression, statements: List[ASTNode]):
+    def __init__(self, source_token: Token, ctx: ParseContext, count: Expression, count_variable: str, statements: List[ASTNode]):
         super().__init__(source_token, ctx)
         self.count = count
+        self.count_variable = count_variable
         self.statements = statements
 
     def __str__(self) -> str:
@@ -180,9 +184,65 @@ class RepeatBlock(ASTNode):
     def __repr__(self) -> str:
         return f"RepeatBlock(count={repr(self.count)}, statements={[repr(s) for s in self.statements]})"
     
+class FunctionCall(ASTNode):
+    function_name: str
+    arguments: List[Expression]
+
+    def __init__(self, source_token: Token, ctx: ParseContext, function_name: str, arguments: List[Operand]):
+        super().__init__(source_token, ctx)
+        self.function_name = function_name
+        self.arguments = arguments
+
+    def __str__(self) -> str:
+        return f"{self.function_name}({', '.join(str(arg) for arg in self.arguments)})"
+    
+    def __repr__(self) -> str:
+        return f"FunctionCall(function_name={self.function_name}, arguments={[repr(a) for a in self.arguments]})"
+    
 Operand: TypeAlias = Union[Expression, int, float, str]
 
-def produce_ggml_graph(ctx0: ggml.ggml_context_p, node: ASTNode) -> Optional[Tensor | int | float]:
+def produce_ggml_function_call_graph(ctx0: wrapper.ggml_context_p, df: wrapper.ggml_cgraph_p, node: FunctionCall | Expression) -> Optional[Tensor | int | float]:
+    if isinstance(node, FunctionCall):
+        func_name = node.function_name
+        raw_args = node.arguments
+    else:
+        func_name = node.function_name
+        raw_args = node.operands
+
+    args = [produce_ggml_graph(ctx0, df, op) if isinstance(op, Expression) else op for op in raw_args]
+    logging.debug(f"{func_name=} {args=} {raw_args=}")
+
+    ggml_function = marshall.GGML_FUNCTIONS.get(str(func_name))
+    if ggml_function is not None:
+        ensure_args(func_name, args, ggml_function.arg_types, node.source_token)
+        func_args = hashlib.md5(", ".join([arg.name if isinstance(arg, Tensor) else str(arg) for arg in args]).encode()).hexdigest()[-4:]
+        # TODO: gracefully handle errors here
+        result_name =  f"{func_name}_{func_args}"
+        if node.ctx.repeat_index != None:
+            result_name = result_name + f"_{node.ctx.repeat_index}"
+        result: Tensor = ggml_function.func(ctx0, result_name, *args)
+        logging.debug(f"{result=}")
+
+        node.ctx.intermediate_tensors.append(result)
+        return result
+    
+    # handle functions that return numbers separately for now
+    if isinstance(node, Expression):
+        result_num = None
+        if len(args) == 1 and (isinstance(args[0], int) or isinstance(args[0], float)):
+            result_num = node.operation.apply_to_floats(float(args[0]), None, function_name=func_name)
+        elif len(args) == 2 and isinstance(args[0], Tensor) and isinstance(args[1], int) and func_name == "row_size":
+            result_num = gen.ggml_row_size(args[0].type, args[1])
+        elif len(args) == 1 and isinstance(args[0], Tensor) and func_name == "element_size":
+            result_num = gen.ggml_element_size(args[0].ptr)
+        
+        if result_num is not None:
+            logging.debug(f"{result_num=}")
+            return result_num
+
+    raise NotImplementedError(f"Unsupported function: {func_name}")
+
+def produce_ggml_graph(ctx0: wrapper.ggml_context_p, df: wrapper.ggml_cgraph_p, node: ASTNode) -> Optional[Tensor | int | float]:
     """Performs "instruction lowering" on the AST, producing a ggml graph. This is the final step in compiling a GGML model."""
 
     # logging.debug(f"Building ggml graph for {node}")
@@ -200,29 +260,10 @@ def produce_ggml_graph(ctx0: ggml.ggml_context_p, node: ASTNode) -> Optional[Ten
                 else:
                     raise ParseError(f"Unsupported operand type: {type(node.operands[0])}", node.source_token)
             case Operation.FUNC_CALL:
-                func_name = node.function_name
-                args = [produce_ggml_graph(ctx0, op) if isinstance(op, Expression) else op for op in node.operands]
-                logging.debug(f"{func_name=} {args=}")
-
-                ggml_function = wrapper.GGML_FUNCTIONS.get(str(func_name))
-                if ggml_function is not None:
-                    ensure_args(func_name, args, ggml_function.arg_types, node.source_token)
-                    func_args = hashlib.md5(", ".join([arg.name if isinstance(arg, Tensor) else str(arg) for arg in args]).encode()).hexdigest()[-4:]
-                    # TODO: gracefully handle errors here
-                    result: Tensor = ggml_function.func(ctx0, f"{func_name}_{func_args}", *args)
-                    logging.debug(f"{result=}")
-
-                    node.ctx.intermediate_tensors.append(result)
-                    return result
-                
-                # handle sqrt separately for now
-                if len(args) == 1 and (isinstance(args[0], int) or isinstance(args[0], float)):
-                    return node.operation.apply_to_floats(float(args[0]), None, function_name=func_name)
-
-                raise NotImplementedError(f"Unsupported function: {func_name}")
+                return produce_ggml_function_call_graph(ctx0, df, node)
             case Operation.DIVIDE:
-                lhs = produce_ggml_graph(ctx0, node.operands[0])
-                rhs = produce_ggml_graph(ctx0, node.operands[1])
+                lhs = produce_ggml_graph(ctx0, df, node.operands[0])
+                rhs = produce_ggml_graph(ctx0, df, node.operands[1])
 
                 match [lhs, rhs]:
                     case [int(a), int(b)]:
@@ -237,8 +278,8 @@ def produce_ggml_graph(ctx0: ggml.ggml_context_p, node: ASTNode) -> Optional[Ten
                     case _:
                         raise ValueError(f"Unsupported operands for division: {lhs}, {rhs}")
             case Operation.MULTIPLY:
-                lhs = produce_ggml_graph(ctx0, node.operands[0])
-                rhs = produce_ggml_graph(ctx0, node.operands[1])
+                lhs = produce_ggml_graph(ctx0, df, node.operands[0])
+                rhs = produce_ggml_graph(ctx0, df, node.operands[1])
 
                 match [lhs, rhs]:
                     case [int(a), int(b)] | [float(a), float(b)] | [float(a), int(b)] | [int(a), float(b)]:
@@ -250,22 +291,61 @@ def produce_ggml_graph(ctx0: ggml.ggml_context_p, node: ASTNode) -> Optional[Ten
                         return result
                     case _:
                         raise ValueError(f"Unsupported operands for multiplication: {lhs}, {rhs}")
-                    
+            case Operation.ADD:
+                lhs = produce_ggml_graph(ctx0, df, node.operands[0])
+                rhs = produce_ggml_graph(ctx0, df, node.operands[1])
+
+                match [lhs, rhs]:
+                    case [int(a), int(b)] | [float(a), float(b)] | [float(a), int(b)] | [int(a), float(b)]:
+                        return a + b
+                    case [Tensor(), Tensor()]:
+                        result_name = f"add_{id(node)}"
+                        result = wrapper.add(ctx0, result_name, lhs, rhs)
+                        node.ctx.intermediate_tensors.append(result)
+                        return result
+                    case _:
+                        raise ValueError(f"Unsupported operands for addition: {lhs}, {rhs}")
+            case Operation.SUBTRACT:
+                lhs = produce_ggml_graph(ctx0, df, node.operands[0])
+                rhs = produce_ggml_graph(ctx0, df, node.operands[1])
+
+                match [lhs, rhs]:
+                    case [int(a), int(b)] | [float(a), float(b)] | [float(a), int(b)] | [int(a), float(b)]:
+                        return a - b
+                    case [Tensor(), Tensor()]:
+                        result_name = f"sub_{id(node)}"
+                        result = wrapper.sub(ctx0, result_name, lhs, rhs)
+                        node.ctx.intermediate_tensors.append(result)
+                        return result
+                    case _:
+                        raise ValueError(f"Unsupported operands for subtraction: {lhs}, {rhs}")
 
         raise ParseError(f"Unsupported operation: {node.operation}", node.source_token)
     elif isinstance(node, Assignment):
-        expression_value = produce_ggml_graph(ctx0, node.expression)
+        expression_value = produce_ggml_graph(ctx0, df, node.expression)
         if expression_value:
             if isinstance(expression_value, Tensor):
-                node.ctx.graph[node.target] = expression_value
+                target_name = node.target
+                node.ctx.graph[target_name] = expression_value
+                
+                if node.ctx.repeat_index != None:
+                    target_name = target_name + f"_{node.ctx.repeat_index}"
+                gen.ggml_set_name(expression_value.ptr, target_name.encode())
             else:
                 raise ParseError("Can only assign values of type Tensor to graph variables", node.source_token)
         return
     elif isinstance(node, RepeatBlock):
+        node.ctx.repeat_var_name = node.count_variable
         for i in range(0, int(node.count)):
-            node.ctx.cur_layer = i
+            node.ctx.repeat_index = i
             for stmt in node.statements:
-                produce_ggml_graph(ctx0, stmt)
+                produce_ggml_graph(ctx0, df, stmt)
+        return
+    elif isinstance(node, FunctionCall):
+        function_result = produce_ggml_function_call_graph(ctx0, df, node)
+        if isinstance(function_result, Tensor):
+            # ensure intermediate tensors that are not assigned to any variables are properly added to the graph
+            gen.ggml_build_forward_expand(df, function_result.ptr)
         return
     
     raise ParseError(f"Unsupported statement: {node}", node.source_token)
