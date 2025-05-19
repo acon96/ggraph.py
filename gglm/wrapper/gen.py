@@ -629,7 +629,6 @@ class struct_ggml_init_params(Structure):
         mem_size: ctypes.c_uint64
         mem_buffer: ctypes.c_void_p
         no_alloc: ctypes.c_bool
-        PADDING_0: ctypes.Array[ctypes.c_ubyte]
 struct_ggml_init_params._pack_ = 1 # source:False
 struct_ggml_init_params._fields_ = [
     ('mem_size', ctypes.c_uint64),
@@ -641,7 +640,6 @@ struct_ggml_init_params._fields_ = [
 class struct_ggml_tensor(Structure):
     if TYPE_CHECKING:
         type: ggml_type
-        PADDING_0: ctypes.Array[ctypes.c_ubyte]
         buffer: ctypes._Pointer[struct_ggml_backend_buffer]
         ne: ctypes.Array[ctypes.c_int64]
         nb: ctypes.Array[ctypes.c_uint64]
@@ -707,7 +705,6 @@ def ggml_cycles_per_ms():
 class struct__IO_FILE(Structure):
     if TYPE_CHECKING:
         _flags: ctypes.c_int32
-        PADDING_0: ctypes.Array[ctypes.c_ubyte]
         _IO_read_ptr: ctypes._Pointer[ctypes.c_char]
         _IO_read_end: ctypes._Pointer[ctypes.c_char]
         _IO_read_base: ctypes._Pointer[ctypes.c_char]
@@ -727,7 +724,6 @@ class struct__IO_FILE(Structure):
         _cur_column: ctypes.c_uint16
         _vtable_offset: ctypes.c_byte
         _shortbuf: ctypes.Array[ctypes.c_char]
-        PADDING_1: ctypes.Array[ctypes.c_ubyte]
         _lock: ctypes.c_void_p
         _offset: ctypes.c_int64
         _codecvt: ctypes._Pointer[struct__IO_codecvt]
@@ -802,7 +798,6 @@ class struct_ggml_context(Structure):
         mem_buffer: ctypes.c_void_p
         mem_buffer_owned: ctypes.c_bool
         no_alloc: ctypes.c_bool
-        PADDING_0: ctypes.Array[ctypes.c_ubyte]
         n_objects: ctypes.c_int32
         objects_begin: ctypes._Pointer[struct_ggml_object]
         objects_end: ctypes._Pointer[struct_ggml_object]
@@ -1809,14 +1804,12 @@ class struct_ggml_cgraph(Structure):
         size: ctypes.c_int32
         n_nodes: ctypes.c_int32
         n_leafs: ctypes.c_int32
-        PADDING_0: ctypes.Array[ctypes.c_ubyte]
         nodes: ctypes._Pointer[ctypes._Pointer[struct_ggml_tensor]]
         grads: ctypes._Pointer[ctypes._Pointer[struct_ggml_tensor]]
         grad_accs: ctypes._Pointer[ctypes._Pointer[struct_ggml_tensor]]
         leafs: ctypes._Pointer[ctypes._Pointer[struct_ggml_tensor]]
         visited_hash_set: struct_ggml_hash_set
         order: ggml_cgraph_eval_order
-        PADDING_1: ctypes.Array[ctypes.c_ubyte]
 @ctypes_function_for_shared_library('libggml-base.so')("ggml_build_forward_expand", [ctypes.POINTER(struct_ggml_cgraph), ctypes.POINTER(struct_ggml_tensor)], None, enabled=True)
 def ggml_build_forward_expand(cgraph: ctypes._Pointer[struct_ggml_cgraph], tensor: ctypes._Pointer[struct_ggml_tensor]):
     ...
@@ -1939,7 +1932,6 @@ class struct_ggml_type_traits(Structure):
         blck_size_interleave: ctypes.c_int64
         type_size: ctypes.c_uint64
         is_quantized: ctypes.c_bool
-        PADDING_0: ctypes.Array[ctypes.c_ubyte]
         to_float: Callable[[ctypes.c_void_p, ctypes._Pointer[ctypes.c_float], ctypes.c_int64], None]
         from_float_ref: Callable[[ctypes._Pointer[ctypes.c_float], ctypes.c_void_p, ctypes.c_int64], None]
 struct_ggml_type_traits._pack_ = 1 # source:False
@@ -1979,7 +1971,6 @@ class struct_ggml_threadpool_params(Structure):
         poll: ctypes.c_uint32
         strict_cpu: ctypes.c_bool
         paused: ctypes.c_bool
-        PADDING_0: ctypes.Array[ctypes.c_ubyte]
 struct_ggml_threadpool_params._pack_ = 1 # source:False
 struct_ggml_threadpool_params._fields_ = [
     ('cpumask', ctypes.c_bool * 512),
@@ -2666,10 +2657,8 @@ class struct_ggml_backend_sched_split(Structure):
         backend_id: ctypes.c_int32
         i_start: ctypes.c_int32
         i_end: ctypes.c_int32
-        PADDING_0: ctypes.Array[ctypes.c_ubyte]
         inputs: ctypes.Array[ctypes._Pointer[struct_ggml_tensor]]
         n_inputs: ctypes.c_int32
-        PADDING_1: ctypes.Array[ctypes.c_ubyte]
         graph: struct_ggml_cgraph
 class struct_ggml_hash_set(Structure):
     if TYPE_CHECKING:
@@ -2856,7 +2845,6 @@ class struct_ggml_cplan(Structure):
         work_size: ctypes.c_uint64
         work_data: ctypes._Pointer[ctypes.c_ubyte]
         n_threads: ctypes.c_int32
-        PADDING_0: ctypes.Array[ctypes.c_ubyte]
         threadpool: ctypes._Pointer[struct_ggml_threadpool]
         abort_callback: Callable[[ctypes.c_void_p], ctypes.c_bool]
         abort_callback_data: ctypes.c_void_p
@@ -3087,7 +3075,6 @@ class struct_ggml_type_traits_cpu(Structure):
         from_float: Callable[[ctypes._Pointer[ctypes.c_float], ctypes.c_void_p, ctypes.c_int64], None]
         vec_dot: Callable[[ctypes.c_int32, ctypes._Pointer[ctypes.c_float], ctypes.c_uint64, ctypes.c_void_p, ctypes.c_uint64, ctypes.c_void_p, ctypes.c_uint64, ctypes.c_int32], None]
         vec_dot_type: ggml_type
-        PADDING_0: ctypes.Array[ctypes.c_ubyte]
         nrows: ctypes.c_int64
 struct_ggml_type_traits_cpu._pack_ = 1 # source:False
 struct_ggml_type_traits_cpu._fields_ = [
@@ -3222,7 +3209,6 @@ def ggml_vec_dot_bf16(n: ctypes.c_int32, s: ctypes._Pointer[ctypes.c_float], bs:
 class struct_ggml_context_container(Structure):
     if TYPE_CHECKING:
         used: ctypes.c_bool
-        PADDING_0: ctypes.Array[ctypes.c_ubyte]
         context: struct_ggml_context
 struct_ggml_context._pack_ = 1 # source:False
 struct_ggml_context._fields_ = [
@@ -3760,6 +3746,107 @@ struct_ggml_object._fields_ = [
     ('padding', ctypes.c_char * 4),
 ]
 
+ggml_init_params = struct_ggml_init_params
+ggml_tensor = struct_ggml_tensor
+ggml_backend_buffer = struct_ggml_backend_buffer
+ggml_object = struct_ggml_object
+ggml_context = struct_ggml_context
+ggml_cgraph = struct_ggml_cgraph
+ggml_type_traits = struct_ggml_type_traits
+ggml_threadpool_params = struct_ggml_threadpool_params
+ggml_threadpool = struct_ggml_threadpool
+ggml_backend_buffer_type = struct_ggml_backend_buffer_type
+ggml_backend_device = struct_ggml_backend_device
+ggml_backend_buffer_type_i = struct_ggml_backend_buffer_type_i
+ggml_backend = struct_ggml_backend
+ggml_backend_i = struct_ggml_backend_i
+ggml_backend_event = struct_ggml_backend_event
+ggml_tallocr = struct_ggml_tallocr
+ggml_gallocr = struct_ggml_gallocr
+ggml_backend_reg = struct_ggml_backend_reg
+ggml_backend_reg_i = struct_ggml_backend_reg_i
+ggml_backend_device_i = struct_ggml_backend_device_i
+ggml_backend_dev_props = struct_ggml_backend_dev_props
+ggml_backend_dev_caps = struct_ggml_backend_dev_caps
+ggml_backend_feature = struct_ggml_backend_feature
+ggml_backend_sched = struct_ggml_backend_sched
+ggml_backend_sched_split = struct_ggml_backend_sched_split
+ggml_hash_set = struct_ggml_hash_set
+ggml_backend_graph_copy = struct_ggml_backend_graph_copy
+ggml_cplan = struct_ggml_cplan
+ggml_type_traits_cpu = struct_ggml_type_traits_cpu
+ggml_logger_state = struct_ggml_logger_state
+ggml_context_container = struct_ggml_context_container
+ggml_backend_buffer_i = struct_ggml_backend_buffer_i
+ggml_backend_multi_buffer_context = struct_ggml_backend_multi_buffer_context
+if TYPE_CHECKING:
+    ggml_init_params_p = ctypes._Pointer[struct_ggml_init_params]
+    ggml_tensor_p = ctypes._Pointer[struct_ggml_tensor]
+    ggml_backend_buffer_p = ctypes._Pointer[struct_ggml_backend_buffer]
+    ggml_object_p = ctypes._Pointer[struct_ggml_object]
+    ggml_context_p = ctypes._Pointer[struct_ggml_context]
+    ggml_cgraph_p = ctypes._Pointer[struct_ggml_cgraph]
+    ggml_type_traits_p = ctypes._Pointer[struct_ggml_type_traits]
+    ggml_threadpool_params_p = ctypes._Pointer[struct_ggml_threadpool_params]
+    ggml_threadpool_p = ctypes._Pointer[struct_ggml_threadpool]
+    ggml_backend_buffer_type_p = ctypes._Pointer[struct_ggml_backend_buffer_type]
+    ggml_backend_device_p = ctypes._Pointer[struct_ggml_backend_device]
+    ggml_backend_buffer_type_i_p = ctypes._Pointer[struct_ggml_backend_buffer_type_i]
+    ggml_backend_p = ctypes._Pointer[struct_ggml_backend]
+    ggml_backend_i_p = ctypes._Pointer[struct_ggml_backend_i]
+    ggml_backend_event_p = ctypes._Pointer[struct_ggml_backend_event]
+    ggml_tallocr_p = ctypes._Pointer[struct_ggml_tallocr]
+    ggml_gallocr_p = ctypes._Pointer[struct_ggml_gallocr]
+    ggml_backend_reg_p = ctypes._Pointer[struct_ggml_backend_reg]
+    ggml_backend_reg_i_p = ctypes._Pointer[struct_ggml_backend_reg_i]
+    ggml_backend_device_i_p = ctypes._Pointer[struct_ggml_backend_device_i]
+    ggml_backend_dev_props_p = ctypes._Pointer[struct_ggml_backend_dev_props]
+    ggml_backend_dev_caps_p = ctypes._Pointer[struct_ggml_backend_dev_caps]
+    ggml_backend_feature_p = ctypes._Pointer[struct_ggml_backend_feature]
+    ggml_backend_sched_p = ctypes._Pointer[struct_ggml_backend_sched]
+    ggml_backend_sched_split_p = ctypes._Pointer[struct_ggml_backend_sched_split]
+    ggml_hash_set_p = ctypes._Pointer[struct_ggml_hash_set]
+    ggml_backend_graph_copy_p = ctypes._Pointer[struct_ggml_backend_graph_copy]
+    ggml_cplan_p = ctypes._Pointer[struct_ggml_cplan]
+    ggml_type_traits_cpu_p = ctypes._Pointer[struct_ggml_type_traits_cpu]
+    ggml_logger_state_p = ctypes._Pointer[struct_ggml_logger_state]
+    ggml_context_container_p = ctypes._Pointer[struct_ggml_context_container]
+    ggml_backend_buffer_i_p = ctypes._Pointer[struct_ggml_backend_buffer_i]
+    ggml_backend_multi_buffer_context_p = ctypes._Pointer[struct_ggml_backend_multi_buffer_context]
+else:
+    ggml_init_params_p = ctypes.POINTER(struct_ggml_init_params)
+    ggml_tensor_p = ctypes.POINTER(struct_ggml_tensor)
+    ggml_backend_buffer_p = ctypes.POINTER(struct_ggml_backend_buffer)
+    ggml_object_p = ctypes.POINTER(struct_ggml_object)
+    ggml_context_p = ctypes.POINTER(struct_ggml_context)
+    ggml_cgraph_p = ctypes.POINTER(struct_ggml_cgraph)
+    ggml_type_traits_p = ctypes.POINTER(struct_ggml_type_traits)
+    ggml_threadpool_params_p = ctypes.POINTER(struct_ggml_threadpool_params)
+    ggml_threadpool_p = ctypes.POINTER(struct_ggml_threadpool)
+    ggml_backend_buffer_type_p = ctypes.POINTER(struct_ggml_backend_buffer_type)
+    ggml_backend_device_p = ctypes.POINTER(struct_ggml_backend_device)
+    ggml_backend_buffer_type_i_p = ctypes.POINTER(struct_ggml_backend_buffer_type_i)
+    ggml_backend_p = ctypes.POINTER(struct_ggml_backend)
+    ggml_backend_i_p = ctypes.POINTER(struct_ggml_backend_i)
+    ggml_backend_event_p = ctypes.POINTER(struct_ggml_backend_event)
+    ggml_tallocr_p = ctypes.POINTER(struct_ggml_tallocr)
+    ggml_gallocr_p = ctypes.POINTER(struct_ggml_gallocr)
+    ggml_backend_reg_p = ctypes.POINTER(struct_ggml_backend_reg)
+    ggml_backend_reg_i_p = ctypes.POINTER(struct_ggml_backend_reg_i)
+    ggml_backend_device_i_p = ctypes.POINTER(struct_ggml_backend_device_i)
+    ggml_backend_dev_props_p = ctypes.POINTER(struct_ggml_backend_dev_props)
+    ggml_backend_dev_caps_p = ctypes.POINTER(struct_ggml_backend_dev_caps)
+    ggml_backend_feature_p = ctypes.POINTER(struct_ggml_backend_feature)
+    ggml_backend_sched_p = ctypes.POINTER(struct_ggml_backend_sched)
+    ggml_backend_sched_split_p = ctypes.POINTER(struct_ggml_backend_sched_split)
+    ggml_hash_set_p = ctypes.POINTER(struct_ggml_hash_set)
+    ggml_backend_graph_copy_p = ctypes.POINTER(struct_ggml_backend_graph_copy)
+    ggml_cplan_p = ctypes.POINTER(struct_ggml_cplan)
+    ggml_type_traits_cpu_p = ctypes.POINTER(struct_ggml_type_traits_cpu)
+    ggml_logger_state_p = ctypes.POINTER(struct_ggml_logger_state)
+    ggml_context_container_p = ctypes.POINTER(struct_ggml_context_container)
+    ggml_backend_buffer_i_p = ctypes.POINTER(struct_ggml_backend_buffer_i)
+    ggml_backend_multi_buffer_context_p = ctypes.POINTER(struct_ggml_backend_multi_buffer_context)
 __all__ = \
     ['GGML_BACKEND_BUFFER_USAGE_ANY',
     'GGML_BACKEND_BUFFER_USAGE_COMPUTE',
@@ -3852,20 +3939,25 @@ __all__ = \
     'ggml_aligned_free', 'ggml_aligned_malloc', 'ggml_arange',
     'ggml_are_same_layout', 'ggml_are_same_shape',
     'ggml_are_same_stride', 'ggml_argmax', 'ggml_argsort',
-    'ggml_backend_alloc_buffer', 'ggml_backend_alloc_ctx_tensors',
-    'ggml_backend_alloc_ctx_tensors_from_buft',
+    'ggml_backend', 'ggml_backend_alloc_buffer',
+    'ggml_backend_alloc_ctx_tensors',
+    'ggml_backend_alloc_ctx_tensors_from_buft', 'ggml_backend_buffer',
     'ggml_backend_buffer_clear', 'ggml_backend_buffer_copy_tensor',
     'ggml_backend_buffer_free', 'ggml_backend_buffer_get_alignment',
     'ggml_backend_buffer_get_alloc_size',
     'ggml_backend_buffer_get_base',
     'ggml_backend_buffer_get_max_size',
     'ggml_backend_buffer_get_size', 'ggml_backend_buffer_get_type',
-    'ggml_backend_buffer_get_usage', 'ggml_backend_buffer_init',
+    'ggml_backend_buffer_get_usage', 'ggml_backend_buffer_i',
+    'ggml_backend_buffer_i_p', 'ggml_backend_buffer_init',
     'ggml_backend_buffer_init_tensor', 'ggml_backend_buffer_is_host',
     'ggml_backend_buffer_is_multi_buffer', 'ggml_backend_buffer_name',
-    'ggml_backend_buffer_reset', 'ggml_backend_buffer_set_usage',
-    'ggml_backend_buffer_t', 'ggml_backend_buffer_type_t',
-    'ggml_backend_buffer_usage', 'ggml_backend_buft_alloc_buffer',
+    'ggml_backend_buffer_p', 'ggml_backend_buffer_reset',
+    'ggml_backend_buffer_set_usage', 'ggml_backend_buffer_t',
+    'ggml_backend_buffer_type', 'ggml_backend_buffer_type_i',
+    'ggml_backend_buffer_type_i_p', 'ggml_backend_buffer_type_p',
+    'ggml_backend_buffer_type_t', 'ggml_backend_buffer_usage',
+    'ggml_backend_buft_alloc_buffer',
     'ggml_backend_buft_get_alignment',
     'ggml_backend_buft_get_alloc_size',
     'ggml_backend_buft_get_device', 'ggml_backend_buft_get_max_size',
@@ -3900,39 +3992,52 @@ __all__ = \
     'ggml_backend_dev_backend_reg',
     'ggml_backend_dev_buffer_from_host_ptr',
     'ggml_backend_dev_buffer_type', 'ggml_backend_dev_by_name',
-    'ggml_backend_dev_by_type', 'ggml_backend_dev_count',
+    'ggml_backend_dev_by_type', 'ggml_backend_dev_caps',
+    'ggml_backend_dev_caps_p', 'ggml_backend_dev_count',
     'ggml_backend_dev_description', 'ggml_backend_dev_get',
     'ggml_backend_dev_get_extra_bufts_t',
     'ggml_backend_dev_get_props', 'ggml_backend_dev_host_buffer_type',
     'ggml_backend_dev_init', 'ggml_backend_dev_memory',
     'ggml_backend_dev_name', 'ggml_backend_dev_offload_op',
+    'ggml_backend_dev_props', 'ggml_backend_dev_props_p',
     'ggml_backend_dev_supports_buft', 'ggml_backend_dev_supports_op',
     'ggml_backend_dev_t', 'ggml_backend_dev_type',
+    'ggml_backend_device', 'ggml_backend_device_i',
+    'ggml_backend_device_i_p', 'ggml_backend_device_p',
     'ggml_backend_device_register', 'ggml_backend_eval_callback',
-    'ggml_backend_event_free', 'ggml_backend_event_new',
+    'ggml_backend_event', 'ggml_backend_event_free',
+    'ggml_backend_event_new', 'ggml_backend_event_p',
     'ggml_backend_event_record', 'ggml_backend_event_synchronize',
     'ggml_backend_event_t', 'ggml_backend_event_wait',
+    'ggml_backend_feature', 'ggml_backend_feature_p',
     'ggml_backend_free', 'ggml_backend_get_alignment',
     'ggml_backend_get_default_buffer_type', 'ggml_backend_get_device',
     'ggml_backend_get_features_t', 'ggml_backend_get_max_size',
     'ggml_backend_graph_compute', 'ggml_backend_graph_compute_async',
-    'ggml_backend_graph_copy', 'ggml_backend_graph_copy_free',
+    'ggml_backend_graph_copy', 'ggml_backend_graph_copy',
+    'ggml_backend_graph_copy_free', 'ggml_backend_graph_copy_p',
     'ggml_backend_graph_plan_compute',
     'ggml_backend_graph_plan_create', 'ggml_backend_graph_plan_free',
     'ggml_backend_graph_plan_t', 'ggml_backend_guid',
-    'ggml_backend_init_best', 'ggml_backend_init_by_name',
-    'ggml_backend_init_by_type', 'ggml_backend_is_cpu',
-    'ggml_backend_is_cuda', 'ggml_backend_load',
-    'ggml_backend_load_all', 'ggml_backend_load_all_from_path',
+    'ggml_backend_i', 'ggml_backend_i_p', 'ggml_backend_init_best',
+    'ggml_backend_init_by_name', 'ggml_backend_init_by_type',
+    'ggml_backend_is_cpu', 'ggml_backend_is_cuda',
+    'ggml_backend_load', 'ggml_backend_load_all',
+    'ggml_backend_load_all_from_path',
     'ggml_backend_multi_buffer_alloc_buffer',
     'ggml_backend_multi_buffer_clear',
+    'ggml_backend_multi_buffer_context',
+    'ggml_backend_multi_buffer_context_p',
     'ggml_backend_multi_buffer_free_buffer',
     'ggml_backend_multi_buffer_set_usage', 'ggml_backend_name',
-    'ggml_backend_offload_op', 'ggml_backend_reg_by_name',
-    'ggml_backend_reg_count', 'ggml_backend_reg_dev_count',
-    'ggml_backend_reg_dev_get', 'ggml_backend_reg_get',
-    'ggml_backend_reg_get_proc_address', 'ggml_backend_reg_name',
-    'ggml_backend_reg_t', 'ggml_backend_sched_alloc_graph',
+    'ggml_backend_offload_op', 'ggml_backend_p', 'ggml_backend_reg',
+    'ggml_backend_reg_by_name', 'ggml_backend_reg_count',
+    'ggml_backend_reg_dev_count', 'ggml_backend_reg_dev_get',
+    'ggml_backend_reg_get', 'ggml_backend_reg_get_proc_address',
+    'ggml_backend_reg_i', 'ggml_backend_reg_i_p',
+    'ggml_backend_reg_name', 'ggml_backend_reg_p',
+    'ggml_backend_reg_t', 'ggml_backend_sched',
+    'ggml_backend_sched_alloc_graph',
     'ggml_backend_sched_alloc_splits',
     'ggml_backend_sched_backend_from_buffer',
     'ggml_backend_sched_backend_id',
@@ -3948,14 +4053,15 @@ __all__ = \
     'ggml_backend_sched_get_tensor_backend',
     'ggml_backend_sched_graph_compute',
     'ggml_backend_sched_graph_compute_async',
-    'ggml_backend_sched_new', 'ggml_backend_sched_print_assignments',
+    'ggml_backend_sched_new', 'ggml_backend_sched_p',
+    'ggml_backend_sched_print_assignments',
     'ggml_backend_sched_reserve', 'ggml_backend_sched_reset',
     'ggml_backend_sched_set_eval_callback',
     'ggml_backend_sched_set_if_supported',
     'ggml_backend_sched_set_tensor_backend',
-    'ggml_backend_sched_split_graph',
-    'ggml_backend_sched_synchronize', 'ggml_backend_sched_t',
-    'ggml_backend_set_abort_callback_t',
+    'ggml_backend_sched_split', 'ggml_backend_sched_split_graph',
+    'ggml_backend_sched_split_p', 'ggml_backend_sched_synchronize',
+    'ggml_backend_sched_t', 'ggml_backend_set_abort_callback_t',
     'ggml_backend_set_n_threads_t',
     'ggml_backend_split_buffer_type_t', 'ggml_backend_supports_buft',
     'ggml_backend_supports_op', 'ggml_backend_synchronize',
@@ -3972,49 +4078,51 @@ __all__ = \
     'ggml_calc_conv_transpose_output_size',
     'ggml_calc_pool_output_size', 'ggml_calloc', 'ggml_can_mul_mat',
     'ggml_can_out_prod', 'ggml_can_repeat', 'ggml_can_repeat_rows',
-    'ggml_cast', 'ggml_cgraph_eval_order', 'ggml_clamp',
-    'ggml_compute_backward', 'ggml_concat', 'ggml_cont',
-    'ggml_cont_1d', 'ggml_cont_2d', 'ggml_cont_3d', 'ggml_cont_4d',
-    'ggml_cont_impl', 'ggml_conv_1d', 'ggml_conv_1d_dw',
+    'ggml_cast', 'ggml_cgraph', 'ggml_cgraph_eval_order',
+    'ggml_cgraph_p', 'ggml_clamp', 'ggml_compute_backward',
+    'ggml_concat', 'ggml_cont', 'ggml_cont_1d', 'ggml_cont_2d',
+    'ggml_cont_3d', 'ggml_cont_4d', 'ggml_cont_impl', 'ggml_context',
+    'ggml_context_container', 'ggml_context_container_p',
+    'ggml_context_p', 'ggml_conv_1d', 'ggml_conv_1d_dw',
     'ggml_conv_1d_dw_ph', 'ggml_conv_1d_ph', 'ggml_conv_2d',
     'ggml_conv_2d_dw', 'ggml_conv_2d_dw_direct', 'ggml_conv_2d_s1_ph',
     'ggml_conv_2d_sk_p0', 'ggml_conv_transpose_1d',
     'ggml_conv_transpose_2d_p0', 'ggml_cos', 'ggml_cos_impl',
-    'ggml_cos_inplace', 'ggml_count_equal', 'ggml_cpu_bf16_to_fp32',
-    'ggml_cpu_fp16_to_fp32', 'ggml_cpu_fp32_to_bf16',
-    'ggml_cpu_fp32_to_fp16', 'ggml_cpu_get_sve_cnt',
-    'ggml_cpu_has_amx_int8', 'ggml_cpu_has_arm_fma',
-    'ggml_cpu_has_avx', 'ggml_cpu_has_avx2', 'ggml_cpu_has_avx512',
-    'ggml_cpu_has_avx512_bf16', 'ggml_cpu_has_avx512_vbmi',
-    'ggml_cpu_has_avx512_vnni', 'ggml_cpu_has_avx_vnni',
-    'ggml_cpu_has_bmi2', 'ggml_cpu_has_dotprod', 'ggml_cpu_has_f16c',
-    'ggml_cpu_has_fma', 'ggml_cpu_has_fp16_va',
-    'ggml_cpu_has_llamafile', 'ggml_cpu_has_matmul_int8',
-    'ggml_cpu_has_neon', 'ggml_cpu_has_riscv_v', 'ggml_cpu_has_sme',
-    'ggml_cpu_has_sse3', 'ggml_cpu_has_ssse3', 'ggml_cpu_has_sve',
-    'ggml_cpu_has_vsx', 'ggml_cpu_has_vxe', 'ggml_cpu_has_wasm_simd',
-    'ggml_cpu_init', 'ggml_cpy', 'ggml_cpy_impl',
-    'ggml_cross_entropy_loss', 'ggml_cross_entropy_loss_back',
-    'ggml_custom1_op_t', 'ggml_custom2_op_t', 'ggml_custom3_op_t',
-    'ggml_custom_4d', 'ggml_custom_inplace', 'ggml_custom_op_t',
-    'ggml_cycles', 'ggml_cycles_per_ms', 'ggml_diag',
-    'ggml_diag_mask_inf', 'ggml_diag_mask_inf_impl',
-    'ggml_diag_mask_inf_inplace', 'ggml_diag_mask_zero',
-    'ggml_diag_mask_zero_impl', 'ggml_diag_mask_zero_inplace',
-    'ggml_div', 'ggml_div_impl', 'ggml_div_inplace', 'ggml_dup',
-    'ggml_dup_impl', 'ggml_dup_inplace', 'ggml_dup_tensor',
-    'ggml_dup_tensor_layout', 'ggml_element_size', 'ggml_elu',
-    'ggml_elu_inplace', 'ggml_exp', 'ggml_exp_inplace',
-    'ggml_flash_attn_back', 'ggml_flash_attn_ext',
+    'ggml_cos_inplace', 'ggml_count_equal', 'ggml_cplan',
+    'ggml_cplan_p', 'ggml_cpu_bf16_to_fp32', 'ggml_cpu_fp16_to_fp32',
+    'ggml_cpu_fp32_to_bf16', 'ggml_cpu_fp32_to_fp16',
+    'ggml_cpu_get_sve_cnt', 'ggml_cpu_has_amx_int8',
+    'ggml_cpu_has_arm_fma', 'ggml_cpu_has_avx', 'ggml_cpu_has_avx2',
+    'ggml_cpu_has_avx512', 'ggml_cpu_has_avx512_bf16',
+    'ggml_cpu_has_avx512_vbmi', 'ggml_cpu_has_avx512_vnni',
+    'ggml_cpu_has_avx_vnni', 'ggml_cpu_has_bmi2',
+    'ggml_cpu_has_dotprod', 'ggml_cpu_has_f16c', 'ggml_cpu_has_fma',
+    'ggml_cpu_has_fp16_va', 'ggml_cpu_has_llamafile',
+    'ggml_cpu_has_matmul_int8', 'ggml_cpu_has_neon',
+    'ggml_cpu_has_riscv_v', 'ggml_cpu_has_sme', 'ggml_cpu_has_sse3',
+    'ggml_cpu_has_ssse3', 'ggml_cpu_has_sve', 'ggml_cpu_has_vsx',
+    'ggml_cpu_has_vxe', 'ggml_cpu_has_wasm_simd', 'ggml_cpu_init',
+    'ggml_cpy', 'ggml_cpy_impl', 'ggml_cross_entropy_loss',
+    'ggml_cross_entropy_loss_back', 'ggml_custom1_op_t',
+    'ggml_custom2_op_t', 'ggml_custom3_op_t', 'ggml_custom_4d',
+    'ggml_custom_inplace', 'ggml_custom_op_t', 'ggml_cycles',
+    'ggml_cycles_per_ms', 'ggml_diag', 'ggml_diag_mask_inf',
+    'ggml_diag_mask_inf_impl', 'ggml_diag_mask_inf_inplace',
+    'ggml_diag_mask_zero', 'ggml_diag_mask_zero_impl',
+    'ggml_diag_mask_zero_inplace', 'ggml_div', 'ggml_div_impl',
+    'ggml_div_inplace', 'ggml_dup', 'ggml_dup_impl',
+    'ggml_dup_inplace', 'ggml_dup_tensor', 'ggml_dup_tensor_layout',
+    'ggml_element_size', 'ggml_elu', 'ggml_elu_inplace', 'ggml_exp',
+    'ggml_exp_inplace', 'ggml_flash_attn_back', 'ggml_flash_attn_ext',
     'ggml_flash_attn_ext_get_prec', 'ggml_flash_attn_ext_set_prec',
     'ggml_fopen', 'ggml_format_name', 'ggml_fp16_t',
     'ggml_fp16_to_fp32', 'ggml_fp16_to_fp32_row', 'ggml_fp32_to_bf16',
     'ggml_fp32_to_bf16_row', 'ggml_fp32_to_bf16_row_ref',
     'ggml_fp32_to_fp16', 'ggml_fp32_to_fp16_row', 'ggml_free',
     'ggml_from_float_t', 'ggml_ftype', 'ggml_ftype_to_ggml_type',
-    'ggml_gallocr_alloc_graph', 'ggml_gallocr_free',
+    'ggml_gallocr', 'ggml_gallocr_alloc_graph', 'ggml_gallocr_free',
     'ggml_gallocr_get_buffer_size', 'ggml_gallocr_new',
-    'ggml_gallocr_new_n', 'ggml_gallocr_reserve',
+    'ggml_gallocr_new_n', 'ggml_gallocr_p', 'ggml_gallocr_reserve',
     'ggml_gallocr_reserve_n', 'ggml_gallocr_t',
     'ggml_gated_linear_attn', 'ggml_gelu', 'ggml_gelu_inplace',
     'ggml_gelu_quick', 'ggml_gelu_quick_inplace', 'ggml_get_data',
@@ -4039,9 +4147,10 @@ __all__ = \
     'ggml_graph_view', 'ggml_group_norm', 'ggml_group_norm_impl',
     'ggml_group_norm_inplace', 'ggml_guid', 'ggml_guid_matches',
     'ggml_guid_t', 'ggml_hardsigmoid', 'ggml_hardswish',
-    'ggml_hash_map_free', 'ggml_hash_set_free', 'ggml_hash_set_new',
-    'ggml_hash_set_reset', 'ggml_hash_size', 'ggml_im2col',
-    'ggml_im2col_back', 'ggml_init', 'ggml_is_3d',
+    'ggml_hash_map_free', 'ggml_hash_set', 'ggml_hash_set_free',
+    'ggml_hash_set_new', 'ggml_hash_set_p', 'ggml_hash_set_reset',
+    'ggml_hash_size', 'ggml_im2col', 'ggml_im2col_back', 'ggml_init',
+    'ggml_init_params', 'ggml_init_params_p', 'ggml_is_3d',
     'ggml_is_contiguous', 'ggml_is_contiguous_0',
     'ggml_is_contiguous_1', 'ggml_is_contiguous_2',
     'ggml_is_contiguous_channels', 'ggml_is_contiguous_n',
@@ -4053,12 +4162,13 @@ __all__ = \
     'ggml_leaky_relu', 'ggml_log', 'ggml_log_callback',
     'ggml_log_callback_default', 'ggml_log_impl', 'ggml_log_inplace',
     'ggml_log_internal', 'ggml_log_internal_v', 'ggml_log_level',
-    'ggml_log_set', 'ggml_malloc', 'ggml_map_custom1',
-    'ggml_map_custom1_impl', 'ggml_map_custom1_inplace',
-    'ggml_map_custom2', 'ggml_map_custom2_impl',
-    'ggml_map_custom2_inplace', 'ggml_map_custom3',
-    'ggml_map_custom3_impl', 'ggml_map_custom3_inplace', 'ggml_mean',
-    'ggml_mul', 'ggml_mul_impl', 'ggml_mul_inplace', 'ggml_mul_mat',
+    'ggml_log_set', 'ggml_logger_state', 'ggml_logger_state_p',
+    'ggml_malloc', 'ggml_map_custom1', 'ggml_map_custom1_impl',
+    'ggml_map_custom1_inplace', 'ggml_map_custom2',
+    'ggml_map_custom2_impl', 'ggml_map_custom2_inplace',
+    'ggml_map_custom3', 'ggml_map_custom3_impl',
+    'ggml_map_custom3_inplace', 'ggml_mean', 'ggml_mul',
+    'ggml_mul_impl', 'ggml_mul_inplace', 'ggml_mul_mat',
     'ggml_mul_mat_id', 'ggml_mul_mat_set_prec', 'ggml_n_dims',
     'ggml_nbytes', 'ggml_nbytes_pad', 'ggml_neg', 'ggml_neg_inplace',
     'ggml_nelements', 'ggml_new_buffer', 'ggml_new_f32',
@@ -4067,10 +4177,11 @@ __all__ = \
     'ggml_new_tensor_1d', 'ggml_new_tensor_2d', 'ggml_new_tensor_3d',
     'ggml_new_tensor_4d', 'ggml_new_tensor_impl', 'ggml_norm',
     'ggml_norm_impl', 'ggml_norm_inplace', 'ggml_nrows',
-    'ggml_numa_init', 'ggml_numa_strategy', 'ggml_object_type',
-    'ggml_op', 'ggml_op_desc', 'ggml_op_name', 'ggml_op_pool',
-    'ggml_op_symbol', 'ggml_opt_step_adamw', 'ggml_out_prod',
-    'ggml_pad', 'ggml_pad_reflect_1d', 'ggml_permute', 'ggml_pool_1d',
+    'ggml_numa_init', 'ggml_numa_strategy', 'ggml_object',
+    'ggml_object_p', 'ggml_object_type', 'ggml_op', 'ggml_op_desc',
+    'ggml_op_name', 'ggml_op_pool', 'ggml_op_symbol',
+    'ggml_opt_step_adamw', 'ggml_out_prod', 'ggml_pad',
+    'ggml_pad_reflect_1d', 'ggml_permute', 'ggml_pool_1d',
     'ggml_pool_2d', 'ggml_pool_2d_back', 'ggml_prec',
     'ggml_print_backtrace', 'ggml_print_backtrace_symbols',
     'ggml_print_object', 'ggml_print_objects', 'ggml_quantize_chunk',
@@ -4105,43 +4216,31 @@ __all__ = \
     'ggml_ssm_scan', 'ggml_status', 'ggml_status_to_string',
     'ggml_step', 'ggml_step_inplace', 'ggml_sub', 'ggml_sub_impl',
     'ggml_sub_inplace', 'ggml_sub_or_set', 'ggml_sum',
-    'ggml_sum_rows', 'ggml_tallocr_alloc', 'ggml_tallocr_new',
-    'ggml_tanh', 'ggml_tanh_inplace', 'ggml_tensor_flag',
-    'ggml_tensor_overhead', 'ggml_threadpool_free',
-    'ggml_threadpool_get_n_threads', 'ggml_threadpool_new',
-    'ggml_threadpool_params_default', 'ggml_threadpool_params_init',
-    'ggml_threadpool_params_match', 'ggml_threadpool_pause',
+    'ggml_sum_rows', 'ggml_tallocr', 'ggml_tallocr_alloc',
+    'ggml_tallocr_new', 'ggml_tallocr_p', 'ggml_tanh',
+    'ggml_tanh_inplace', 'ggml_tensor', 'ggml_tensor_flag',
+    'ggml_tensor_overhead', 'ggml_tensor_p', 'ggml_threadpool',
+    'ggml_threadpool_free', 'ggml_threadpool_get_n_threads',
+    'ggml_threadpool_new', 'ggml_threadpool_p',
+    'ggml_threadpool_params', 'ggml_threadpool_params_default',
+    'ggml_threadpool_params_init', 'ggml_threadpool_params_match',
+    'ggml_threadpool_params_p', 'ggml_threadpool_pause',
     'ggml_threadpool_resume', 'ggml_threadpool_t', 'ggml_time_init',
     'ggml_time_ms', 'ggml_time_us', 'ggml_timestep_embedding',
     'ggml_to_float_t', 'ggml_top_k', 'ggml_transpose', 'ggml_type',
     'ggml_type_name', 'ggml_type_size', 'ggml_type_sizef',
-    'ggml_unary', 'ggml_unary_impl', 'ggml_unary_inplace',
-    'ggml_unary_op', 'ggml_unary_op_name', 'ggml_unravel_index',
-    'ggml_upscale', 'ggml_upscale_ext', 'ggml_upscale_impl',
-    'ggml_used_mem', 'ggml_validate_row_data', 'ggml_vec_dot_bf16',
-    'ggml_vec_dot_f16', 'ggml_vec_dot_f32', 'ggml_vec_dot_t',
-    'ggml_view_1d', 'ggml_view_2d', 'ggml_view_3d', 'ggml_view_4d',
-    'ggml_view_impl', 'ggml_view_tensor', 'ggml_visit_parents',
-    'ggml_win_part', 'ggml_win_unpart', 'graph_copy_dup_tensor',
+    'ggml_type_traits', 'ggml_type_traits_cpu',
+    'ggml_type_traits_cpu_p', 'ggml_type_traits_p', 'ggml_unary',
+    'ggml_unary_impl', 'ggml_unary_inplace', 'ggml_unary_op',
+    'ggml_unary_op_name', 'ggml_unravel_index', 'ggml_upscale',
+    'ggml_upscale_ext', 'ggml_upscale_impl', 'ggml_used_mem',
+    'ggml_validate_row_data', 'ggml_vec_dot_bf16', 'ggml_vec_dot_f16',
+    'ggml_vec_dot_f32', 'ggml_vec_dot_t', 'ggml_view_1d',
+    'ggml_view_2d', 'ggml_view_3d', 'ggml_view_4d', 'ggml_view_impl',
+    'ggml_view_tensor', 'ggml_visit_parents', 'ggml_win_part',
+    'ggml_win_unpart', 'graph_copy_dup_tensor',
     'graph_copy_init_tensor', 'incr_ptr_aligned', 'int32_t',
     'int64_t', 'size_t', 'struct__0', 'struct__IO_FILE',
     'struct__IO_codecvt', 'struct__IO_marker', 'struct__IO_wide_data',
     'struct___va_list_tag', 'struct_c__SA_ggml_bf16_t',
-    'struct_ggml_backend', 'struct_ggml_backend_buffer',
-    'struct_ggml_backend_buffer_i', 'struct_ggml_backend_buffer_type',
-    'struct_ggml_backend_buffer_type_i',
-    'struct_ggml_backend_dev_caps', 'struct_ggml_backend_dev_props',
-    'struct_ggml_backend_device', 'struct_ggml_backend_device_i',
-    'struct_ggml_backend_event', 'struct_ggml_backend_feature',
-    'struct_ggml_backend_graph_copy', 'struct_ggml_backend_i',
-    'struct_ggml_backend_multi_buffer_context',
-    'struct_ggml_backend_reg', 'struct_ggml_backend_reg_i',
-    'struct_ggml_backend_sched', 'struct_ggml_backend_sched_split',
-    'struct_ggml_cgraph', 'struct_ggml_context',
-    'struct_ggml_context_container', 'struct_ggml_cplan',
-    'struct_ggml_gallocr', 'struct_ggml_hash_set',
-    'struct_ggml_init_params', 'struct_ggml_logger_state',
-    'struct_ggml_object', 'struct_ggml_tallocr', 'struct_ggml_tensor',
-    'struct_ggml_threadpool', 'struct_ggml_threadpool_params',
-    'struct_ggml_type_traits', 'struct_ggml_type_traits_cpu',
     'struct_hash_map', 'uint8_t', 'va_list']

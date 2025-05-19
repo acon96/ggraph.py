@@ -10,7 +10,6 @@ from lark import Token
 from gglm.utils import Tensor, ASTNode, ensure_args
 from gglm.models.parser import ParseContext, ParseError
 import gglm.wrapper as wrapper
-import gglm.wrapper.marshall as marshall
 from gglm.wrapper import gen
 
 
@@ -212,7 +211,7 @@ def produce_ggml_function_call_graph(ctx0: wrapper.ggml_context_p, df: wrapper.g
     args = [produce_ggml_graph(ctx0, df, op) if isinstance(op, Expression) else op for op in raw_args]
     logging.debug(f"{func_name=} {args=} {raw_args=}")
 
-    ggml_function = marshall.GGML_FUNCTIONS.get(str(func_name))
+    ggml_function = wrapper.GGML_FUNCTIONS.get(str(func_name))
     if ggml_function is not None:
         ensure_args(func_name, args, ggml_function.arg_types, node.source_token)
         func_args = hashlib.md5(", ".join([arg.name if isinstance(arg, Tensor) else str(arg) for arg in args]).encode()).hexdigest()[-4:]
