@@ -65,7 +65,7 @@ def get_tensor_to_numpy(tensor: Tensor) -> npt.NDArray[Any]:
                 n_elems
             )
         elif ggml_is_quantized(tensor.type):
-            quantized_type = ggml_get_type_traits(tensor.type)
+            quantized_type: ggml_type_traits = ggml_get_type_traits(tensor.type)
             quantized_type.to_float(
                 ctypes.cast(quantized_buffer, ctypes.c_void_p),
                 ctypes.cast(result_buffer, ctypes.POINTER(ctypes.c_float)),
@@ -74,7 +74,7 @@ def get_tensor_to_numpy(tensor: Tensor) -> npt.NDArray[Any]:
         else:
             raise ValueError(f"Unsupported tensor type: {tensor.type}")
 
-    return np.ctypeslib.as_array(result_buffer).reshape(list(reversed(shape)))
+    return np.ctypeslib.as_array(result_buffer).reshape(shape)
 
 def ggml_tensor_size(shape: List[int], ggml_type: Optional[int] = None):
     tensor_overhead = ggml_tensor_overhead()
@@ -217,8 +217,8 @@ def soft_max(ctx0: ggml_context_p, result_name: str, a: Tensor, mask: Tensor, sc
 def cont(ctx0: ggml_context_p, result_name: str, a: Tensor):
     return Tensor.from_tensor_ptr(result_name, ggml_cont(ctx0, a.ptr))
 
-def cont_2d(ctx0: ggml_context_p, result_name: str, a: Tensor, x: int, y: int):
-    return Tensor.from_tensor_ptr(result_name, ggml_cont_2d(ctx0, a.ptr, x, y))
+def cont_2d(ctx0: ggml_context_p, result_name: str, a: Tensor, ne0: int, ne1: int):
+    return Tensor.from_tensor_ptr(result_name, ggml_cont_2d(ctx0, a.ptr, ne0, ne1))
 
 def transpose(ctx0: ggml_context_p, result_name: str, a: Tensor):
     return Tensor.from_tensor_ptr(result_name, ggml_transpose(ctx0, a.ptr))

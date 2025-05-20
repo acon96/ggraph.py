@@ -31,8 +31,8 @@ model Qwen3 {
             kCur = mul(rms_norm(kCur, params.model.f_norm_rms_eps), blk.%d.attn_k_norm.weight)
             
             # apply RoPE
-            qCur = rope(qCur, input_positions, params.model.n_rot, params.context.rope_scaling_type, params.model.n_ctx, params.context.rope_freq_base, params.context.rope_freq_scale, params.context.yarn_ext_factor, params.context.yarn_attn_factor, params.context.yarn_beta_fast, params.context.yarn_beta_slow)
-            kCur = rope(kCur, input_positions, params.model.n_rot, params.context.rope_scaling_type, params.model.n_ctx, params.context.rope_freq_base, params.context.rope_freq_scale, params.context.yarn_ext_factor, params.context.yarn_attn_factor, params.context.yarn_beta_fast, params.context.yarn_beta_slow)
+            qCur = rope(qCur, input_positions, params.model.n_rot, 2, params.model.n_ctx, params.context.rope_freq_base, params.context.rope_freq_scale, params.context.yarn_ext_factor, params.context.yarn_attn_factor, params.context.yarn_beta_fast, params.context.yarn_beta_slow)
+            kCur = rope(kCur, input_positions, params.model.n_rot, 2, params.model.n_ctx, params.context.rope_freq_base, params.context.rope_freq_scale, params.context.yarn_ext_factor, params.context.yarn_attn_factor, params.context.yarn_beta_fast, params.context.yarn_beta_slow)
             
             q = permute(qCur, 0, 2, 1, 3)
             k = permute(kCur, 0, 2, 1, 3)

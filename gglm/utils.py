@@ -193,8 +193,8 @@ class ModelParams:
         return float(self.get(GGUFKeys.Rope.SCALING_FACTOR, 1.0))
     
     @property
-    def rope_scaling_type(self) -> str:
-        return str(self.get(GGUFKeys.Rope.SCALING_TYPE, "linear"))
+    def rope_scaling_type(self) -> int:
+        return int(self.get(GGUFKeys.Rope.SCALING_TYPE, 1))
     
     @property
     def rope_attn_factor(self) -> float:
@@ -227,7 +227,7 @@ class ModelParams:
             n_ctx=self.n_ctx,
             rope_freq_base=self.rope_freq_base,
             rope_freq_scale=self.rope_freq_scale,
-            rope_scaling_type=self.get(GGUFKeys.Rope.SCALING_TYPE, 0),
+            rope_scaling_type=self.rope_scaling_type,
         )
     
 def ensure_args(function_name: str, args: List[Tensor | int | float | str | None], types: List[type], token: Token) -> None:
@@ -251,9 +251,6 @@ def plot_logprob_heatmap(logprobs):
     plt.savefig('logprobs.png')
 
 def plot_attention_heatmap(attn_weights: np.ndarray, layer):
-    # avg_attn = np.mean(attn_weights, axis=0)  # average over heads, shape: (seq_len, seq_len)
-    # avg_attn = np.reshape(attn_weights, (attn_weights.shape[0], attn_weights.shape[1] * attn_weights.shape[2]))
-
     num_heads = attn_weights.shape[0]
 
     fig, axes = plt.subplots(1, num_heads, figsize=(5 * num_heads, 5))
@@ -264,5 +261,17 @@ def plot_attention_heatmap(attn_weights: np.ndarray, layer):
         ax.set_xlabel('Key Position')
         ax.set_ylabel('Query Position')
         fig.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
+    plt.tight_layout()
+    plt.savefig(f'attention_{layer:02}.png')
+
+
+def plot_attention_heatmap_avg(attn_weights: np.ndarray, layer):
+    avg_attn = np.mean(attn_weights, axis=0)  # average over heads, shape: (seq_len, seq_len)
+    plt.figure(figsize=(12, 6), dpi=300)
+    plt.imshow(avg_attn, cmap='Blues', interpolation='nearest')
+    plt.title(f'Average Attention - Layer {layer}')
+    plt.xlabel('Key Position')
+    plt.ylabel('Query Position')
+    plt.colorbar(label='Attention Weight')
     plt.tight_layout()
     plt.savefig(f'attention_{layer:02}.png')

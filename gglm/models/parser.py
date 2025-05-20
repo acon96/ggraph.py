@@ -3,6 +3,7 @@ from typing import List, Dict, Final
 from lark import Lark, Tree, Token
 from lark.exceptions import UnexpectedToken, UnexpectedEOF, UnexpectedCharacters
 import logging
+import importlib.resources
 
 from gglm.utils import ParseContext, ParseError
 from gglm.models import Tensor, GGMLContextParams, ModelParams
@@ -231,9 +232,9 @@ class GGMLParser:
 
     def parse(self, file: str, context_params: GGMLContextParams, model_params: ModelParams):
         """Parse a file containing a graph definition. Return the parsed graph context."""
+
         # Read the content of the provided file
-        with open(file, 'r') as f:
-            text = f.read()
+        text = importlib.resources.files("gglm.models").joinpath(file).read_text()
 
         # Run the parsing operation on the file's content and return the result
         try:

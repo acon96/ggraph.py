@@ -5,7 +5,7 @@ logging.basicConfig(level=logging.DEBUG)
 import numpy as np
 
 from gglm.models import GGMLModel, GGMLBackendType, Tensor
-from gglm.utils import plot_logprob_heatmap, plot_attention_heatmap
+from gglm.utils import plot_logprob_heatmap, plot_attention_heatmap, plot_attention_heatmap_avg
 from gglm.wrapper import gen
 from transformers.models.qwen2 import Qwen2TokenizerFast
 
@@ -53,20 +53,16 @@ def top_p_tokens(probs: np.ndarray, top_p: float):
 
 def sample_from_logits(logits: np.ndarray, *, temperature: float, top_p: float, top_k: int):
     probs = probs_from_logits(logits, temperature=temperature)
-    probs = top_p_tokens(probs, top_p)
-    probs = top_k_tokens(probs, top_k)
+    # probs = top_p_tokens(probs, top_p)
+    # probs = top_k_tokens(probs, top_k)
     probs /= np.sum(probs, axis=-1, keepdims=True)
     return np.random.choice(len(probs), p=probs)
 
-n_ctx = 6
+n_ctx = 32
 tokenizer: Qwen2TokenizerFast = Qwen2TokenizerFast.from_pretrained("Qwen/Qwen-tokenizer")
 
 model = GGMLModel(gguf_path, n_ctx=n_ctx)
 model._build_forward()
-
-print(f"tokenizer.pad_token_id: {tokenizer.pad_token_id} (type: {type(tokenizer.pad_token_id)})")
-if tokenizer.pad_token_id is None:
-    raise ValueError("tokenizer.pad_token_id is None! Please check the tokenizer setup.")
 
 chat_template_kv = model.model_params._data["tokenizer.chat_template"]
 tokenizer.chat_template = chat_template_kv.contents()
@@ -95,7 +91,7 @@ def look_up_tensor(name: str):
     return Tensor.from_tensor_ptr(name, gen.ggml_graph_get_tensor(model.compute_graph, name.encode()))
 
 try:
-    for i in range(2):
+    for i in range(32):
 
         padded_input = pad(input_ids, n_ctx=n_ctx, value=tokenizer.pad_token_id).tolist()
         input_positions = [float(x) for x in range(n_ctx)]
@@ -107,8 +103,12 @@ try:
             kq_mask=kq_mask,
         )
 
+        # print(f"{result.shape=} {result.dtype=}")
+        # print(f"{result=}")
+
+
         output_pos = len(input_ids) - 1
-        logits = result.T[output_pos]
+        logits = result[output_pos]
 
         # get the top 10 most likely tokens
         # top_10_tokens = np.argpartition(logits, -10)[-10:]
@@ -117,22 +117,9 @@ try:
         #     print(f"{tokenizer.decode([token])} ({token})", end=", ")
         # print()
 
-        plot_logprob_heatmap(
-            logprobs=result
-        )
-
-        for layer in [0]:
-            kq = look_up_tensor(f"kq_{layer}")
-            print(f"{kq=} {kq.data=}")
-
-            kq_softmax = look_up_tensor(f"kq_softmax_{layer}")
-            print(f"{kq_softmax=} {kq_softmax.data=}")
-            plot_attention_heatmap(kq.data, layer)
-
-        # print(f"{result=} {result.shape=} {result.dtype=}")
-
-        # kq_mask_tensor = look_up_tensor("kq_mask")
-        # print(f"{kq_mask_tensor=} {kq_mask_tensor.data}")
+        # plot_logprob_heatmap(
+        #     logprobs=result
+        # )
 
         new_token = sample_from_logits(logits=logits, temperature=0.7, top_p=0.95, top_k=40)
         decoded = tokenizer.decode([new_token])
@@ -141,7 +128,7 @@ try:
 
         print(decoded, end="", flush=True)
 
-        input("Press enter to continue...")
+        # input("Press enter to continue...")
     print("\n")
 except KeyboardInterrupt:
     print("\n")
