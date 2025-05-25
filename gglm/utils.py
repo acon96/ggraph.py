@@ -7,7 +7,7 @@ import matplotlib
 import matplotlib.pyplot as plt
 from lark import Token
 import numpy as np
-from gguf.gguf_reader import ReaderField
+from gguf.gguf_reader import ReaderField, ReaderTensor
 from gguf.constants import Keys as GGUFKeys
 
 from gglm.wrapper import Tensor
@@ -34,11 +34,10 @@ class ParseError(Exception):
         return self
         
 @dataclass(kw_only=True)
-class GGMLContextParams:
+class ContextParams:
     """Stores parameters related to the current GGML execution context"""
     # shard: Optional[Shard]
     n_threads: int
-    n_batches: int
     n_ctx: int
     enable_flash_attn: bool
     yarn_ext_factor: float
@@ -53,72 +52,10 @@ class GGMLContextParams:
 
 
 @dataclass(kw_only=True)
-class ParseContext:
-    model: str
-    source: str
-    context_params: GGMLContextParams
-    model_params: ModelParams
-    created_tensors: List[Tensor] = field(default_factory=lambda: [])
-    intermediate_tensors: List[Tensor] = field(default_factory=lambda: [])
-    gguf_tensors: Dict[str, Tensor] = field(default_factory=lambda: {})
-    graph: Dict[str, Tensor] = field(default_factory=lambda: {})
-    ast: List[ASTNode] = field(default_factory=lambda: [])
-    repeat_index: Optional[int] = None
-    repeat_var_name: Optional[str] = None
-
-class ASTNode:
-    """
-    Represents a node in the abstract syntax tree (AST) of a GGML model. 
-    Contains a reference to its source token and the current parsing context to allow easy reporting of syntax errors.
-    """
-    ctx: ParseContext
-    source_token: Token
-
-    def __init__(self, source_token: Token, ctx: ParseContext):
-        self.source_token = source_token
-        self.ctx = ctx
-
-    def resolve_param(self, name: str, *, raise_error: bool = True) -> Optional[int | float]:
-        if name.startswith("params."):
-            if name.startswith("params.context."):
-                return getattr(self.ctx.context_params, name[len("params.context."):])
-            elif name.startswith("params.model."):
-                return getattr(self.ctx.model_params, name[len("params.model."):])
-            
-        if name == self.ctx.repeat_var_name:
-            return self.ctx.repeat_index
-            
-        try:
-            return int(name)
-        except ValueError:
-            pass
-
-        try:
-            return float(name)
-        except ValueError:
-            pass
-    
-        if raise_error:
-            raise ParseError(f"Unknown param {name}", self.source_token)
-        
-        return None
-    
-    def resolve_tensor(self, name: str, *, raise_error: bool = True) -> Optional[Tensor]:
-        if "%d" in name:
-            name = name % self.ctx.repeat_index
-        
-        if name in self.ctx.graph:
-            return self.ctx.graph[name]
-        
-        if name in self.ctx.gguf_tensors:
-            return self.ctx.gguf_tensors[name]
-
-        if raise_error:
-            raise ParseError(f"Unknown tensor {name}", self.source_token)
-        
-        # logging.debug(f"Attempted to resolve unknown tensor {name}; graph tensors = {self.ctx.graph.keys()}")
-        
-        return None
+class BatchParams:
+    """Stores parameters related to the current GGML batch"""
+    n_tokens: int # batch size
+    kv_output_pos: int # index of the first token in the batch
 
 GraphArg: TypeAlias = Union[Tensor, int, str]
 
@@ -219,6 +156,19 @@ class ModelParams:
     @property
     def f_norm_rms_eps(self) -> float:
         return float(self[GGUFKeys.Attention.LAYERNORM_RMS_EPS])
+    
+    @property
+    def stop_tokens(self) -> List[int]:
+        stop_tokens = [
+            self.get(GGUFKeys.Tokenizer.EOS_ID, ""),
+            self.get(GGUFKeys.Tokenizer.EOT_ID, ""),
+            self.get(GGUFKeys.Tokenizer.EOM_ID, ""),
+            self.get(GGUFKeys.Tokenizer.PAD_ID, ""),
+            self.get(GGUFKeys.Tokenizer.SEP_ID, ""),
+            self.get(GGUFKeys.Tokenizer.UNK_ID, ""),
+            self.get(GGUFKeys.Tokenizer.MASK_ID, ""),
+        ]
+        return [int(token) for token in stop_tokens if isinstance(token, int) or token.isdigit()]
 
     
     def to_default_ggml_context_params_dict(self) -> Dict[str, Any]:

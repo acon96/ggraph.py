@@ -4,10 +4,12 @@ from lark import Lark, Tree, Token
 from lark.exceptions import UnexpectedToken, UnexpectedEOF, UnexpectedCharacters
 import logging
 import importlib.resources
+from dataclasses import dataclass, field
+from gguf import ReaderTensor
 
-from gglm.utils import ParseContext, ParseError
-from gglm.models import Tensor, GGMLContextParams, ModelParams
-from gglm.models.ast import Expression, Assignment, RepeatBlock, FunctionCall, Operand, Operation
+from gglm.utils import ParseError
+from gglm.models import ContextParams, ModelParams
+from gglm.models.ast import ASTNode, Expression, Assignment, RepeatBlock, FunctionCall, Operand, Operation
 from gglm.wrapper import gen
 
 PARSER_DEFINITION = """
@@ -55,6 +57,29 @@ ID: ("a".."z" | "A".."Z")("a".."z" | "A".."Z" | "0".."9" | "_" | "." | "%")*
 
 """
 
+@dataclass(kw_only=True)
+class ParsedTensor:
+    """Represents a parsed tensor"""
+    name: str
+    type: int
+    shape: List[Expression]
+    is_input: bool = False
+    is_view: bool = False
+
+    def __repr__(self):
+        return f"ParsedTensor(name={self.name}, type={self.type}, shape={self.shape}, is_input={self.is_input}, is_view={self.is_view})"
+
+@dataclass(kw_only=True)
+class ParseContext:
+    """Stores the context of the current parsing operation"""
+    model: str
+    source: str
+    context_params: ContextParams
+    model_params: ModelParams
+    created_tensors: List[ParsedTensor] = field(default_factory=lambda: [])
+    # gguf_tensors: Dict[str, ReaderTensor] = field(default_factory=lambda: {})
+    ast: List[ASTNode] = field(default_factory=lambda: [])
+
 
 class GGMLParser:
     """
@@ -95,17 +120,17 @@ class GGMLParser:
 
         return Tree(tree.data, collapsed_children)
     
-    def parse_expression(self, ctx: ParseContext, expr_subtree: Tree) -> Expression:
+    def parse_expression(self, expr_subtree: Tree) -> Expression:
         """Parses an expression subtree into an Expression AST object."""
         def explore_branch(tree_level: Tree | Token) -> Operand:
             if isinstance(tree_level, Token):
-                return Expression(tree_level, ctx, Operation.VALUE, tree_level.value)
+                return Expression(tree_level, Operation.VALUE, tree_level.value)
 
             # Handle function calls
             if tree_level.data == "function_call":
                 func_name = tree_level.children[0].value
                 args = [explore_branch(x) for x in tree_level.children[1:]]
-                return Expression(tree_level.children[0], ctx, Operation.FUNC_CALL, *args, function_name=func_name)
+                return Expression(tree_level.children[0], Operation.FUNC_CALL, *args, function_name=func_name)
 
             # Map rule names to operator tokens and Operation enums
             binary_ops = {
@@ -140,7 +165,7 @@ class GGMLParser:
                     op = op_map.get(op_token.value)
                     if op is None:
                         raise ValueError(f"Unknown operator {op_token.value} in {tree_level.data}")
-                    left = Expression(op_token, ctx, op, left, right)
+                    left = Expression(op_token, op, left, right)
                     i += 2
                 return left
 
@@ -191,46 +216,44 @@ class GGMLParser:
             return result
         raise ParseError(f"Unknown tensor data type '{type_str}'", type_tokens[0])
 
-    def parse_shape(self, ctx: ParseContext, shape_subtree: Tree) -> List[Expression]:
+    def parse_shape(self, shape_subtree: Tree) -> List[Expression]:
         match shape_subtree:
             case Tree(data=Token('RULE', 'shape'), children=[*dims]):
-                return [self.parse_expression(ctx, dim) for dim in dims]
+                return [self.parse_expression(dim) for dim in dims]
         raise ValueError(f"Unknown shape format: {shape_subtree}")
 
-    def parse_tensor(self, ctx: ParseContext, tensor: Tree) -> Tensor:
+    def parse_tensor(self, tensor: Tree) -> ParsedTensor:
         match tensor:
             case Tree(data=Token('RULE', 'tensor_declaration'), children=[name, type, shape]):
                 if isinstance(name, Token) and isinstance(type, Tree) and isinstance(shape, Tree):
-                    new_tensor = Tensor(name=name.value, type=self.parse_type(type), shape=self.parse_shape(ctx, shape))
-                    ctx.created_tensors.append(new_tensor)
+                    new_tensor = ParsedTensor(name=name.value, type=self.parse_type(type), shape=self.parse_shape(shape))
                     return new_tensor
             case Tree(data=Token('RULE', 'tensor_declaration'), children=[name, type, shape, attr]):
                 if isinstance(name, Token) and isinstance(type, Tree) and isinstance(shape, Tree) and isinstance(attr, Token):
-                    new_tensor = Tensor(name=name.value, type=self.parse_type(type), shape=self.parse_shape(ctx, shape), is_input=attr.value == 'is_input')
-                    ctx.created_tensors.append(new_tensor)
+                    new_tensor = ParsedTensor(name=name.value, type=self.parse_type(type), shape=self.parse_shape(shape), is_input=attr.value == 'is_input')
                     return new_tensor
             
         logging.debug(f"{tensor=}")
         raise ParseError(f"Failed to parse tensor", tensor.children[0])
     
-    def parse_statement(self, ctx: ParseContext, statement: Tree):
+    def parse_statement(self, statement: Tree):
         match statement:
             case Tree(data=Token('RULE', 'assignment'), children=[name, value]):
                 if isinstance(name, Token) and isinstance(value, Tree):
-                    return Assignment(source_token=name, ctx=ctx, target=name.value, expression=self.parse_expression(ctx, value))
+                    return Assignment(source_token=name, target=name.value, expression=self.parse_expression(value))
             case Tree(data=Token('RULE', 'repeat_block'), children=[Tree(data=Token('RULE', 'assignment'), children=[count_variable, count]), block]):
                 if isinstance(count, Tree) and isinstance(block, Tree):
-                    statements = [self.parse_statement(ctx, stmt.children[0]) for stmt in block.children]
-                    return RepeatBlock(source_token=count.children[0], ctx=ctx, count=self.parse_expression(ctx, count), count_variable=count_variable, statements=statements)
+                    statements = [self.parse_statement(stmt.children[0]) for stmt in block.children]
+                    return RepeatBlock(source_token=count.children[0], count=self.parse_expression(count), count_variable=count_variable, statements=statements)
             case Tree(data=Token('RULE', 'function_call'), children=[name, *args]):
                 if isinstance(name, Token):
-                    args = [self.parse_expression(ctx, arg) for arg in args]
-                    return FunctionCall(source_token=name, ctx=ctx, function_name=name.value, arguments=args)
+                    args = [self.parse_expression(arg) for arg in args]
+                    return FunctionCall(source_token=name, function_name=name.value, arguments=args)
             case _:
                 logging.debug(f"unmatched statement: {statement}")
         raise ParseError(f"Failed to parse graph statement", statement.children[0])
 
-    def parse(self, file: str, context_params: GGMLContextParams, model_params: ModelParams):
+    def parse(self, file: str, context_params: ContextParams, model_params: ModelParams):
         """Parse a file containing a graph definition. Return the parsed graph context."""
 
         # Read the content of the provided file
@@ -253,28 +276,26 @@ class GGMLParser:
         
         logging.debug(f"Parsing model {model_name}")
 
-        ctx = ParseContext(model=model_name, source=text, context_params=context_params, model_params=model_params)
-
+        parse_ctx = ParseContext(model=model_name, source=text, context_params=context_params, model_params=model_params)
+        
         # parse tensors block
         tensors_subtree = model_tree.children[1]
         if isinstance(tensors_subtree, Tree) and tensors_subtree.data == "tensors":
             for tensor in tensors_subtree.children:
-                parsed_tensor = self.parse_tensor(ctx, tensor)
-                ctx.graph[parsed_tensor.name] = parsed_tensor
-
+                parsed_tensor = self.parse_tensor(tensor)
+                parse_ctx.created_tensors.append(parsed_tensor)
                 logging.debug(f"Defined tensor: {parsed_tensor}")
 
         # parse graph block
         graph_subtree = model_tree.children[2]
         if isinstance(graph_subtree, Tree) and graph_subtree.data == "graph":
             for node in graph_subtree.children[0].children:
-                ctx.ast.append(self.parse_statement(ctx, node.children[0]))
+                parse_ctx.ast.append(self.parse_statement(node.children[0]))
 
-        
-        repeated_tensors = [t for t in ctx.created_tensors if '%d' in t.name]
+        repeated_tensors = [t for t in parse_ctx.created_tensors if '%d' in t.name]
         num_repeated_tensors = len(repeated_tensors)
 
-        repeat_blocks = [s for s in ctx.ast if isinstance(s, RepeatBlock)]
+        repeat_blocks = [s for s in parse_ctx.ast if isinstance(s, RepeatBlock)]
         num_repeat_blocks = len(repeat_blocks)
 
         if num_repeated_tensors > 0 and num_repeat_blocks > 1:
@@ -286,18 +307,16 @@ class GGMLParser:
                 raise ParseError(f"Repeated tensors found but no repeat blocks in the graph! Found {num_repeated_tensors} repeated tensors.", None)
             num_replicas = int(repeat_blocks[0].count)
             # filter out the repeated tensor placeholders then re-add the expanded ones
-            ctx.created_tensors = [t for t in ctx.created_tensors if '%d' not in t.name]
-            ctx.graph = {k: v for k, v in ctx.graph.items() if '%d' not in k}
+            parse_ctx.created_tensors = [t for t in parse_ctx.created_tensors if '%d' not in t.name]
             for i in range(num_replicas):
                 for tensor in repeated_tensors:
                     new_name = tensor.name % i
-                    new_tensor = Tensor(
+                    new_tensor = ParsedTensor(
                         name=new_name, type=tensor.type, shape=tensor.shape, 
                         is_input=tensor.is_input, is_view=tensor.is_view
                     )
-                    ctx.created_tensors.append(new_tensor)
-                    ctx.graph[new_name] = new_tensor
+                    parse_ctx.created_tensors.append(new_tensor)
         
         logging.debug(f"Finished parsing model {model_name}")
         
-        return ctx
+        return parse_ctx

@@ -90,32 +90,51 @@ def ggml_tensor_size(shape: List[int], ggml_type: Optional[int] = None):
 class Tensor:
     name: str
     type: int
+    n_dims: int
     shape: List[int]
     is_input: bool
     is_view: bool
     is_loaded: bool
     is_cache: bool
     _ptr: Optional[ggml_tensor_p]
+    _ctx: Optional[ggml_context_p]
 
     def __init__(self, *, 
                  name: str, type: int, shape: List[int],
                  is_input: bool = False, is_view: bool = False,
                  is_loaded: bool = False, is_cache: bool = False,
-                 ptr: Optional[ggml_tensor_p] = None):
+                 ptr: Optional[ggml_tensor_p] = None,
+                 ctx: Optional[ggml_context_p] = None):
         self.name = name
         self.type = type
+        self.n_dims = len(shape)
         self.shape = ([int(x) for x in shape] + [1, 1, 1, 1])[:4]
         self.is_input = is_input
         self.is_view = is_view
         self.is_loaded = is_loaded
         self.is_cache = is_cache
         self._ptr = ptr
+        self._ctx = ctx
     
     def __str__(self):
         return f"{self.__class__.__name__}(name={self.name}, shape={self.shape}, type={self.type})"
     
     def __repr__(self):
         return str(self)
+    
+    def allocate(self):
+        if self._ptr is None:
+            if self._ctx is None:
+                raise ValueError("Context is not set for tensor allocation")
+            
+            n_dims = len(self.shape)
+            tensor_ptr = ggml_new_tensor(self._ctx, self.type, n_dims, (ctypes.c_int64 * n_dims)(*self.shape))
+            ggml_set_name(tensor_ptr, self.name.encode())
+
+            if self.is_input:
+                ggml_set_input(tensor_ptr)
+            
+            self._ptr = tensor_ptr
     
     @property
     def n_bytes(self) -> int:
@@ -129,7 +148,7 @@ class Tensor:
         return ggml_tensor_size(self.shape, self.type)
     
     @property
-    def ptr(self) -> wrapr.ggml_tensor_p:
+    def ptr(self) -> ggml_tensor_p:
         if self._ptr is None:
             raise ValueError("Attempt to access ptr of a tensor that is not loaded")
         return self._ptr
@@ -168,6 +187,75 @@ class Tensor:
             ptr=ptr,
             is_view=(ptr.contents.view_src != ctypes.POINTER(ggml_tensor)())
         )
+    
+class VariableShapeTensor(Tensor):
+    lowering_ctx: object
+    _shape: List[object]
+
+    def __init__(self, *, name: str, type: int, shape: List[object], **kwargs):
+        super().__init__(name=name, type=type, shape=[0] * 4, **kwargs)
+        self._shape = shape
+
+    @property
+    def shape(self) -> List[int]:
+        return [e.resolve_as_int(self.lowering_ctx) for e in self._shape]
+    
+    @shape.setter
+    def shape(self, new_shape: List[int]):
+        raise ValueError("Cannot set shape of VariableShapeTensor")
+
+class GGMLContext:
+    ctx_size: int
+    ctx: ggml_context_p
+    backend: ggml_backend_p
+    backend_buffer: ggml_backend_buffer_p
+    tensors: List[Tensor]
+
+    def __init__(self, ctx_size: int, backend: ggml_backend_p):
+        self.ctx_size = ctx_size
+        init_params = ggml_init_params(mem_size=ctx_size, mem_buffer=None, no_alloc=True)
+        self.ctx = ggml_init(init_params)
+        self.backend = backend
+
+        if self.ctx is None:
+            raise RuntimeError("Failed to initialize GGML context")
+
+    def add_reader_tensor(self, reader_tensor: ReaderTensor) -> Tensor:
+        tensor = Tensor.from_reader_tensor(reader_tensor)
+        tensor._ctx = self.ctx
+        self.tensors.append(tensor)
+        return tensor
+
+    def add_tensor_from_ptr(self, name: str, ptr: ggml_tensor_p) -> Tensor:
+        tensor = Tensor.from_tensor_ptr(name, ptr)
+        tensor._ctx = self.ctx
+        self.tensors.append(tensor)
+        return tensor
+    
+    def add_tensor_with_variable_shape(self, name: str, shape: List[object], type: int, **kwargs) -> VariableShapeTensor:
+        tensor = VariableShapeTensor(name=name, type=type, shape=shape, ctx=self.ctx, **kwargs)
+        self.tensors.append(tensor)
+        return tensor
+        
+    def reset(self):
+        ggml_reset(self.ctx)
+
+        for tensor in self.tensors:
+            tensor._ptr = None
+
+    def reallocate(self, lowering_ctx: Optional[object] = None):
+        self.reset()
+
+        for tensor in self.tensors:
+            if isinstance(tensor, VariableShapeTensor) and lowering_ctx:
+                tensor.lowering_ctx = lowering_ctx
+            tensor.allocate()
+        
+    def __del__(self):
+        """garbage collect the context"""
+        if self.ctx is not None:
+            ggml_free(self.ctx)
+
 
 
 @dataclass

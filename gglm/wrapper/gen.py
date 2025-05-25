@@ -38,7 +38,7 @@ def ctypes_function_for_shared_library(libname: str):
             else:
                 def f_(*args: Any, **kwargs: Any):
                     raise RuntimeError(
-                        f"Function '{name}' is not available in the shared library (enabled=False)"
+                        f"Function '{name}' is not available in the shared library '{libname}' (enabled=False)"
                     )
                 return cast(F, f_)
 

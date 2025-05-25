@@ -6,8 +6,6 @@ from exo.inference.shard import Shard
 from exo.inference.inference_engine import InferenceEngine
 from exo.download.shard_download import ShardDownloader
 
-import ggml
-
 from .models import GGMLModel
 
 class TokenizerProtocol(Protocol):
