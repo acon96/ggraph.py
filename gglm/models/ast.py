@@ -1,5 +1,5 @@
 from __future__ import annotations
-from typing import List, Union, TypeAlias, Optional, Dict
+from typing import List, Union, TypeAlias, Optional, Dict, TYPE_CHECKING
 from enum import Enum
 import math
 import logging
@@ -9,9 +9,12 @@ from dataclasses import dataclass, field
 from lark import Token
 
 from gglm.utils import Tensor, ensure_args, ContextParams, ModelParams, BatchParams
-from gglm.models.parser import ParseContext, ParseError
+from gglm.models.parser import ParseError
 import gglm.wrapper as wrapper
 from gglm.wrapper import gen
+
+if TYPE_CHECKING:
+    from gglm.models.parser import ParseContext
 
 @dataclass(kw_only=True)
 class LoweringContext:
@@ -26,27 +29,30 @@ class LoweringContext:
     repeat_var_name: Optional[str] = None
     
     @classmethod
-    def from_parse_context(cls, parse_ctx: ParseContext, batch_params: BatchParams) -> LoweringContext:
-        graph = {} # TODO: build the initial "graph" from the parse context
+    def from_parse_context(cls, parse_ctx: ParseContext, batch_params: BatchParams, gguf_tensors: Dict[str, Tensor], io_tensors: Dict[str, Tensor]) -> LoweringContext:
         return cls(
             batch_params=batch_params,
             context_params=parse_ctx.context_params,
             model_params=parse_ctx.model_params,
             intermediate_tensors=[],
-            graph=graph,
+            graph={**gguf_tensors, **io_tensors },
+            gguf_tensors=gguf_tensors,
         )
 
-def resolve_param(lowering_ctx: LoweringContext, name: str, *, raise_error: bool = True, source_token: Optional[Token] = None) -> Optional[int | float]:
+def resolve_param(name: str, *, raise_error: bool = True, lowering_ctx: Optional[LoweringContext] = None, parse_ctx: Optional[ParseContext] = None, source_token: Optional[Token] = None) -> Optional[int | float]:
+
+    ctx_to_check = lowering_ctx if lowering_ctx else parse_ctx
     if name.startswith("params."):
         if name.startswith("params.context."):
-            return getattr(lowering_ctx.context_params, name[len("params.context."):])
+            return getattr(ctx_to_check.context_params, name[len("params.context."):])
         elif name.startswith("params.model."):
-            return getattr(lowering_ctx.model_params, name[len("params.model."):])
+            return getattr(ctx_to_check.model_params, name[len("params.model."):])
         elif name.startswith("params.batch."):
-            return getattr(lowering_ctx.batch_params, name[len("params.batch."):])
-        
-    if name == lowering_ctx.repeat_var_name:
-        return lowering_ctx.repeat_index
+            return getattr(ctx_to_check.batch_params, name[len("params.batch."):])
+    
+    if lowering_ctx:
+        if name == lowering_ctx.repeat_var_name:
+            return lowering_ctx.repeat_index
         
     try:
         return int(name)
@@ -159,7 +165,7 @@ class Expression(ASTNode):
         self.operation = operation
         self.operands = list(operands)
     
-    def resolve_as_int(self, lowering_ctx: LoweringContext) -> int:
+    def resolve_as_int(self, *, lowering_ctx: Optional[LoweringContext] = None, parse_ctx: Optional[ParseContext] = None) -> int:
         a = None
         b = None
 
@@ -176,21 +182,21 @@ class Expression(ASTNode):
             if isinstance(a, int):
                 return a
             elif isinstance(a, str):
-                result = resolve_param(lowering_ctx, a)
+                result = resolve_param(a, lowering_ctx=lowering_ctx, parse_ctx=parse_ctx)
                 if isinstance(result, int):
                     return result
                 raise ValueError(f"Expected int, got {type(result)}")
             else:
                 raise ValueError() # shouldn't get here
         
-        a = a.resolve_as_int(lowering_ctx) if isinstance(a, Expression) else int(a)
+        a = a.resolve_as_int(lowering_ctx=lowering_ctx, parse_ctx=parse_ctx) if isinstance(a, Expression) else int(a)
 
         if b is not None:
-            b = b.resolve_as_int(lowering_ctx) if isinstance(b, Expression) else int(b)
+            b = b.resolve_as_int(lowering_ctx=lowering_ctx, parse_ctx=parse_ctx) if isinstance(b, Expression) else int(b)
 
         return self.operation.apply_to_ints(a, b)
     
-    def resolve_as_float(self, lowering_ctx: LoweringContext) -> float:
+    def resolve_as_float(self, *, lowering_ctx: Optional[LoweringContext] = None, parse_ctx: Optional[ParseContext] = None) -> float:
         a = None
         b = None
 
@@ -207,16 +213,16 @@ class Expression(ASTNode):
             if isinstance(a, int):
                 return a
             elif isinstance(a, str):
-                result = resolve_param(lowering_ctx, a)
+                result = resolve_param(a, lowering_ctx=lowering_ctx, parse_ctx=parse_ctx)
                 if isinstance(result, float):
                     return result
                 raise ValueError(f"Expected float, got {type(result)}")
             else:
                 raise ValueError() # shouldn't get here
         
-        a = a.resolve_as_float(lowering_ctx) if isinstance(a, Expression) else float(a)
+        a = a.resolve_as_float(lowering_ctx=lowering_ctx, parse_ctx=parse_ctx) if isinstance(a, Expression) else float(a)
         if b is not None:
-            b = b.resolve_as_float(lowering_ctx) if isinstance(b, Expression) else float(b)
+            b = b.resolve_as_float(lowering_ctx=lowering_ctx, parse_ctx=parse_ctx) if isinstance(b, Expression) else float(b)
 
         return self.operation.apply_to_floats(a, b)
     
@@ -290,7 +296,7 @@ def produce_ggml_function_call_graph(lowering_ctx: LoweringContext, ctx0: wrappe
         raw_args = node.operands
 
     args = [produce_ggml_graph(lowering_ctx, ctx0, df, op) if isinstance(op, Expression) else op for op in raw_args]
-    logging.debug(f"{func_name=} {args=} {raw_args=}")
+    # logging.debug(f"{func_name=} {args=} {raw_args=}")
 
     ggml_function = wrapper.GGML_FUNCTIONS.get(str(func_name))
     if ggml_function is not None:
@@ -301,7 +307,7 @@ def produce_ggml_function_call_graph(lowering_ctx: LoweringContext, ctx0: wrappe
         if lowering_ctx.repeat_index != None:
             result_name = result_name + f"_{lowering_ctx.repeat_index}"
         result: Tensor = ggml_function.func(ctx0, result_name, *args)
-        logging.debug(f"{result=}")
+        # logging.debug(f"{result=}")
 
         lowering_ctx.intermediate_tensors.append(result)
         return result
@@ -317,7 +323,7 @@ def produce_ggml_function_call_graph(lowering_ctx: LoweringContext, ctx0: wrappe
             result_num = gen.ggml_element_size(args[0].ptr)
         
         if result_num is not None:
-            logging.debug(f"{result_num=}")
+            # logging.debug(f"{result_num=}")
             return result_num
 
     raise NotImplementedError(f"Unsupported function: {func_name}")
@@ -332,7 +338,7 @@ def produce_ggml_graph(lowering_ctx: LoweringContext, ctx0: wrapper.ggml_context
                 if isinstance(node.operands[0], str):
                     result = resolve_tensor(lowering_ctx, node.operands[0], raise_error=False)
                     if not result:
-                        result = resolve_param(lowering_ctx, node.operands[0], raise_error=False)
+                        result = resolve_param(node.operands[0], lowering_ctx=lowering_ctx, raise_error=False)
                     if result is not None:
                         return result
                     else:
@@ -416,7 +422,7 @@ def produce_ggml_graph(lowering_ctx: LoweringContext, ctx0: wrapper.ggml_context
         return
     elif isinstance(node, RepeatBlock):
         lowering_ctx.repeat_var_name = node.count_variable
-        for i in range(0, int(node.count)):
+        for i in range(0, node.count.resolve_as_int(lowering_ctx=lowering_ctx)):
             lowering_ctx.repeat_index = i
             for stmt in node.statements:
                 produce_ggml_graph(lowering_ctx, ctx0, df, stmt)

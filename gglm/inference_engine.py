@@ -1,4 +1,5 @@
 from typing import Optional, Protocol
+import logging
 import numpy as np
 from gglm.models import GGMLModel
 from gglm.utils import BatchParams
@@ -103,15 +104,15 @@ class GGMLInferenceEngine:
 
         # process the prompt
         n_tokens = len(input_ids)
-        self.model.set_up_batch(BatchParams(n_tokens=n_tokens, kv_output_pos=0))
-        
         input_positions = [float(x) for x in range(n_tokens)]
         kq_mask = causal_mask(n_ctx=n_tokens).flatten().tolist()
 
+        logging.debug(f"Processing {len(input_ids)} input tokens with n_ctx={n_ctx}")
         self.model(
             input_tokens=input_ids,
             input_positions=input_positions,
             kq_mask=kq_mask,
+            kv_output_pos=0
         )
 
         # process next tokens one by one
@@ -120,18 +121,18 @@ class GGMLInferenceEngine:
         outputs = []
         while len(input_ids) + len(outputs) < n_ctx and last_output not in stop_tokens:
             cur_pos = len(input_ids) - 1
-            self.model.set_up_batch(BatchParams(n_tokens=1, kv_output_pos=cur_pos))
-
             result = self.model(
                 input_tokens=[last_output],
                 input_positions=[cur_pos],
                 kq_mask=kq_mask[cur_pos],
+                kv_output_pos=len(input_ids) + len(outputs),
             )
 
-            logits = result[cur_pos]
+            logits = result[0]
 
             last_output = sample_from_logits(logits=logits, temperature=0.7, top_p=0.95, top_k=40)
             outputs.append(last_output)
+            logging.debug(f"Generated token: {last_output} ({self.tokenizer.decode([last_output])})")
 
         if input_conversation is not None:
             output_text = self.tokenizer.decode(outputs)

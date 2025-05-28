@@ -57,6 +57,12 @@ class BatchParams:
     n_tokens: int # batch size
     kv_output_pos: int # index of the first token in the batch
 
+    def __eq__(self, other: object) -> bool:
+        return (
+            self.n_tokens == other.n_tokens and
+            self.kv_output_pos == other.kv_output_pos
+        ) if isinstance(other, BatchParams) else False
+
 GraphArg: TypeAlias = Union[Tensor, int, str]
 
 class ModelParams:

@@ -1,14 +1,3 @@
-"""
-To Regenerate the wrapper, run the following commands:
-
-cd /mnt/f/llm-workspace/llama.cpp/ggml/
-clang2py src/ggml.c src/ggml-backend.cpp include/ggml.h include/ggml-alloc.h include/ggml-cuda.h include/ggml-cpu.h include/ggml-backend.h \
-    --clang-args='-I./include/ -I/usr/include/clang/14' --kind efstu \
-    -l /mnt/f/llm-workspace/llama.cpp/build/bin/libggml.so \
-    -l /mnt/f/llm-workspace/llama.cpp/build/bin/libggml-base.so \
-    -l /mnt/f/llm-workspace/llama.cpp/build/bin/libggml-cpu.so \
-    -o /mnt/d/dev/ggml-py-inference/gglm/wrapper/gen.py 
-"""
 from __future__ import annotations
 from typing import List, Type, Callable, Optional, Any
 from dataclasses import dataclass
@@ -192,13 +181,26 @@ class VariableShapeTensor(Tensor):
     lowering_ctx: object
     _shape: List[object]
 
-    def __init__(self, *, name: str, type: int, shape: List[object], **kwargs):
-        super().__init__(name=name, type=type, shape=[0] * 4, **kwargs)
+    def __init__(self, *,
+                 name: str, type: int, shape: List[object],
+                 is_input: bool = False, is_view: bool = False,
+                 is_loaded: bool = False, is_cache: bool = False,
+                 ptr: Optional[ggml_tensor_p] = None,
+                 ctx: Optional[ggml_context_p] = None):
+        self.name = name
+        self.type = type
+        self.n_dims = 4
         self._shape = shape
+        self.is_input = is_input
+        self.is_view = is_view
+        self.is_loaded = is_loaded
+        self.is_cache = is_cache
+        self._ptr = ptr
+        self._ctx = ctx
 
     @property
     def shape(self) -> List[int]:
-        return [e.resolve_as_int(self.lowering_ctx) for e in self._shape]
+        return [e.resolve_as_int(lowering_ctx=self.lowering_ctx) for e in self._shape]
     
     @shape.setter
     def shape(self, new_shape: List[int]):
@@ -208,15 +210,22 @@ class GGMLContext:
     ctx_size: int
     ctx: ggml_context_p
     backend: ggml_backend_p
-    backend_buffer: ggml_backend_buffer_p
+    # backend_buffer: ggml_backend_buffer_p
     tensors: List[Tensor]
 
-    def __init__(self, ctx_size: int, backend: ggml_backend_p):
+    def __init__(self, *, ctx_size: Optional[int] = None, max_tensors: Optional[int] = None, graph_size: Optional[int] = None):
+        if ctx_size is None:
+            ctx_size = 0
+            if max_tensors is not None:
+                ctx_size += max_tensors * ggml_tensor_overhead()
+            if graph_size:
+                ctx_size += ggml_graph_overhead_custom(graph_size, False)
+
         self.ctx_size = ctx_size
         init_params = ggml_init_params(mem_size=ctx_size, mem_buffer=None, no_alloc=True)
         self.ctx = ggml_init(init_params)
-        self.backend = backend
-
+        self.tensors = []
+        
         if self.ctx is None:
             raise RuntimeError("Failed to initialize GGML context")
 
@@ -233,7 +242,8 @@ class GGMLContext:
         return tensor
     
     def add_tensor_with_variable_shape(self, name: str, shape: List[object], type: int, **kwargs) -> VariableShapeTensor:
-        tensor = VariableShapeTensor(name=name, type=type, shape=shape, ctx=self.ctx, **kwargs)
+        tensor = VariableShapeTensor(name=name, type=type, shape=shape, **kwargs)
+        tensor._ctx = self.ctx
         self.tensors.append(tensor)
         return tensor
         

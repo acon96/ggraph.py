@@ -42,6 +42,6 @@ except KeyboardInterrupt:
     print("\n")
     logging.info("Sampling interrupted by user.")
 
-# end_time = time.time()
-# duration = end_time - start_time
-# logging.info(f"Sampled {len(generated_output)} tokens in {duration:.2f} seconds ({len(generated_output) / duration:.2f} tok/sec)")
+end_time = time.time()
+duration = end_time - start_time
+logging.info(f"Sampled {len(generated_output)} tokens in {duration:.2f} seconds ({len(generated_output) / duration:.2f} tok/sec)")

@@ -305,7 +305,7 @@ class GGMLParser:
         if num_repeated_tensors > 0:
             if len(repeat_blocks) == 0:
                 raise ParseError(f"Repeated tensors found but no repeat blocks in the graph! Found {num_repeated_tensors} repeated tensors.", None)
-            num_replicas = int(repeat_blocks[0].count)
+            num_replicas = repeat_blocks[0].count.resolve_as_int(parse_ctx=parse_ctx)
             # filter out the repeated tensor placeholders then re-add the expanded ones
             parse_ctx.created_tensors = [t for t in parse_ctx.created_tensors if '%d' not in t.name]
             for i in range(num_replicas):

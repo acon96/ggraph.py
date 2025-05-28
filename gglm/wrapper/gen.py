@@ -565,7 +565,8 @@ ggml_unary_op__enumvalues = {
     11: 'GGML_UNARY_OP_HARDSWISH',
     12: 'GGML_UNARY_OP_HARDSIGMOID',
     13: 'GGML_UNARY_OP_EXP',
-    14: 'GGML_UNARY_OP_COUNT',
+    14: 'GGML_UNARY_OP_GELU_ERF',
+    15: 'GGML_UNARY_OP_COUNT',
 }
 GGML_UNARY_OP_ABS = 0
 GGML_UNARY_OP_SGN = 1
@@ -581,7 +582,8 @@ GGML_UNARY_OP_SILU = 10
 GGML_UNARY_OP_HARDSWISH = 11
 GGML_UNARY_OP_HARDSIGMOID = 12
 GGML_UNARY_OP_EXP = 13
-GGML_UNARY_OP_COUNT = 14
+GGML_UNARY_OP_GELU_ERF = 14
+GGML_UNARY_OP_COUNT = 15
 ggml_unary_op = ctypes.c_uint32 # enum
 
 # values for enumeration 'ggml_object_type'
@@ -654,8 +656,12 @@ class struct_ggml_tensor(Structure):
         extra: ctypes.c_void_p
         padding: ctypes.Array[ctypes.c_char]
 class struct_ggml_backend_buffer(Structure):
-    pass
-
+    if TYPE_CHECKING:
+        iface: struct_ggml_backend_buffer_i
+        buft: ctypes._Pointer[struct_ggml_backend_buffer_type]
+        context: ctypes.c_void_p
+        size: ctypes.c_uint64
+        usage: ggml_backend_buffer_usage
 struct_ggml_tensor._pack_ = 1 # source:False
 struct_ggml_tensor._fields_ = [
     ('type', ggml_type),
@@ -673,6 +679,55 @@ struct_ggml_tensor._fields_ = [
     ('name', ctypes.c_char * 64),
     ('extra', ctypes.POINTER(None)),
     ('padding', ctypes.c_char * 8),
+]
+
+class struct_ggml_backend_buffer_type(Structure):
+    if TYPE_CHECKING:
+        iface: struct_ggml_backend_buffer_type_i
+        device: ctypes._Pointer[struct_ggml_backend_device]
+        context: ctypes.c_void_p
+class struct_ggml_backend_buffer_i(Structure):
+    if TYPE_CHECKING:
+        free_buffer: Callable[[ctypes._Pointer[struct_ggml_backend_buffer]], None]
+        get_base: Callable[[ctypes._Pointer[struct_ggml_backend_buffer]], ctypes.c_void_p]
+        init_tensor: Callable[[ctypes._Pointer[struct_ggml_backend_buffer], ctypes._Pointer[struct_ggml_tensor]], ggml_status]
+        memset_tensor: Callable[[ctypes._Pointer[struct_ggml_backend_buffer], ctypes._Pointer[struct_ggml_tensor], ctypes.c_ubyte, ctypes.c_uint64, ctypes.c_uint64], None]
+        set_tensor: Callable[[ctypes._Pointer[struct_ggml_backend_buffer], ctypes._Pointer[struct_ggml_tensor], ctypes.c_void_p, ctypes.c_uint64, ctypes.c_uint64], None]
+        get_tensor: Callable[[ctypes._Pointer[struct_ggml_backend_buffer], ctypes._Pointer[struct_ggml_tensor], ctypes.c_void_p, ctypes.c_uint64, ctypes.c_uint64], None]
+        cpy_tensor: Callable[[ctypes._Pointer[struct_ggml_backend_buffer], ctypes._Pointer[struct_ggml_tensor], ctypes._Pointer[struct_ggml_tensor]], ctypes.c_bool]
+        clear: Callable[[ctypes._Pointer[struct_ggml_backend_buffer], ctypes.c_ubyte], None]
+        reset: Callable[[ctypes._Pointer[struct_ggml_backend_buffer]], None]
+struct_ggml_backend_buffer_i._pack_ = 1 # source:False
+struct_ggml_backend_buffer_i._fields_ = [
+    ('free_buffer', ctypes.CFUNCTYPE(None, ctypes.POINTER(struct_ggml_backend_buffer))),
+    ('get_base', ctypes.CFUNCTYPE(ctypes.POINTER(None), ctypes.POINTER(struct_ggml_backend_buffer))),
+    ('init_tensor', ctypes.CFUNCTYPE(ggml_status, ctypes.POINTER(struct_ggml_backend_buffer), ctypes.POINTER(struct_ggml_tensor))),
+    ('memset_tensor', ctypes.CFUNCTYPE(None, ctypes.POINTER(struct_ggml_backend_buffer), ctypes.POINTER(struct_ggml_tensor), ctypes.c_ubyte, ctypes.c_uint64, ctypes.c_uint64)),
+    ('set_tensor', ctypes.CFUNCTYPE(None, ctypes.POINTER(struct_ggml_backend_buffer), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(None), ctypes.c_uint64, ctypes.c_uint64)),
+    ('get_tensor', ctypes.CFUNCTYPE(None, ctypes.POINTER(struct_ggml_backend_buffer), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(None), ctypes.c_uint64, ctypes.c_uint64)),
+    ('cpy_tensor', ctypes.CFUNCTYPE(ctypes.c_bool, ctypes.POINTER(struct_ggml_backend_buffer), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor))),
+    ('clear', ctypes.CFUNCTYPE(None, ctypes.POINTER(struct_ggml_backend_buffer), ctypes.c_ubyte)),
+    ('reset', ctypes.CFUNCTYPE(None, ctypes.POINTER(struct_ggml_backend_buffer))),
+]
+
+
+# values for enumeration 'ggml_backend_buffer_usage'
+ggml_backend_buffer_usage__enumvalues = {
+    0: 'GGML_BACKEND_BUFFER_USAGE_ANY',
+    1: 'GGML_BACKEND_BUFFER_USAGE_WEIGHTS',
+    2: 'GGML_BACKEND_BUFFER_USAGE_COMPUTE',
+}
+GGML_BACKEND_BUFFER_USAGE_ANY = 0
+GGML_BACKEND_BUFFER_USAGE_WEIGHTS = 1
+GGML_BACKEND_BUFFER_USAGE_COMPUTE = 2
+ggml_backend_buffer_usage = ctypes.c_uint32 # enum
+struct_ggml_backend_buffer._pack_ = 1 # source:False
+struct_ggml_backend_buffer._fields_ = [
+    ('iface', struct_ggml_backend_buffer_i),
+    ('buft', ctypes.POINTER(struct_ggml_backend_buffer_type)),
+    ('context', ctypes.POINTER(None)),
+    ('size', ctypes.c_uint64),
+    ('usage', ggml_backend_buffer_usage),
 ]
 
 ggml_abort_callback = ctypes.CFUNCTYPE(ctypes.c_bool, ctypes.POINTER(None))
@@ -1194,6 +1249,10 @@ def ggml_count_equal(ctx: ctypes._Pointer[struct_ggml_context], a: ctypes._Point
 def ggml_repeat(ctx: ctypes._Pointer[struct_ggml_context], a: ctypes._Pointer[struct_ggml_tensor], b: ctypes._Pointer[struct_ggml_tensor]) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
 
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_repeat_4d", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), int64_t, int64_t, int64_t, int64_t], ctypes.POINTER(struct_ggml_tensor), enabled=True)
+def ggml_repeat_4d(ctx: ctypes._Pointer[struct_ggml_context], a: ctypes._Pointer[struct_ggml_tensor], ne0: int64_t, ne1: int64_t, ne2: int64_t, ne3: int64_t) -> ctypes._Pointer[struct_ggml_tensor]:
+    ...
+
 @ctypes_function_for_shared_library('libggml-base.so')("ggml_repeat_back", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor)], ctypes.POINTER(struct_ggml_tensor), enabled=True)
 def ggml_repeat_back(ctx: ctypes._Pointer[struct_ggml_context], a: ctypes._Pointer[struct_ggml_tensor], b: ctypes._Pointer[struct_ggml_tensor]) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
@@ -1276,6 +1335,14 @@ def ggml_gelu(ctx: ctypes._Pointer[struct_ggml_context], a: ctypes._Pointer[stru
 
 @ctypes_function_for_shared_library('libggml-base.so')("ggml_gelu_inplace", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor)], ctypes.POINTER(struct_ggml_tensor), enabled=True)
 def ggml_gelu_inplace(ctx: ctypes._Pointer[struct_ggml_context], a: ctypes._Pointer[struct_ggml_tensor]) -> ctypes._Pointer[struct_ggml_tensor]:
+    ...
+
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_gelu_erf", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor)], ctypes.POINTER(struct_ggml_tensor), enabled=True)
+def ggml_gelu_erf(ctx: ctypes._Pointer[struct_ggml_context], a: ctypes._Pointer[struct_ggml_tensor]) -> ctypes._Pointer[struct_ggml_tensor]:
+    ...
+
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_gelu_erf_inplace", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor)], ctypes.POINTER(struct_ggml_tensor), enabled=True)
+def ggml_gelu_erf_inplace(ctx: ctypes._Pointer[struct_ggml_context], a: ctypes._Pointer[struct_ggml_tensor]) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
 
 @ctypes_function_for_shared_library('libggml-base.so')("ggml_gelu_quick", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor)], ctypes.POINTER(struct_ggml_tensor), enabled=True)
@@ -1998,11 +2065,6 @@ def ggml_threadpool_params_init(p: ctypes._Pointer[struct_ggml_threadpool_params
 def ggml_threadpool_params_match(p0: ctypes._Pointer[struct_ggml_threadpool_params], p1: ctypes._Pointer[struct_ggml_threadpool_params]) -> ctypes.c_bool:
     ...
 
-class struct_ggml_backend_buffer_type(Structure):
-    if TYPE_CHECKING:
-        iface: struct_ggml_backend_buffer_type_i
-        device: ctypes._Pointer[struct_ggml_backend_device]
-        context: ctypes.c_void_p
 class struct_ggml_backend_device(Structure):
     if TYPE_CHECKING:
         iface: struct_ggml_backend_device_i
@@ -2274,17 +2336,6 @@ def ggml_backend_buft_is_host(buft: ggml_backend_buffer_type_t) -> ctypes.c_bool
 def ggml_backend_buft_get_device(buft: ggml_backend_buffer_type_t) -> ggml_backend_dev_t:
     ...
 
-
-# values for enumeration 'ggml_backend_buffer_usage'
-ggml_backend_buffer_usage__enumvalues = {
-    0: 'GGML_BACKEND_BUFFER_USAGE_ANY',
-    1: 'GGML_BACKEND_BUFFER_USAGE_WEIGHTS',
-    2: 'GGML_BACKEND_BUFFER_USAGE_COMPUTE',
-}
-GGML_BACKEND_BUFFER_USAGE_ANY = 0
-GGML_BACKEND_BUFFER_USAGE_WEIGHTS = 1
-GGML_BACKEND_BUFFER_USAGE_COMPUTE = 2
-ggml_backend_buffer_usage = ctypes.c_uint32 # enum
 @ctypes_function_for_shared_library('libggml-base.so')("ggml_backend_buffer_name", [ggml_backend_buffer_t], ctypes.POINTER(ctypes.c_char), enabled=True)
 def ggml_backend_buffer_name(buffer: ggml_backend_buffer_t) -> ctypes._Pointer[ctypes.c_char]:
     ...
@@ -3519,30 +3570,6 @@ struct_ggml_backend_sched_split._fields_ = [
     ('graph', struct_ggml_cgraph),
 ]
 
-class struct_ggml_backend_buffer_i(Structure):
-    if TYPE_CHECKING:
-        free_buffer: Callable[[ctypes._Pointer[struct_ggml_backend_buffer]], None]
-        get_base: Callable[[ctypes._Pointer[struct_ggml_backend_buffer]], ctypes.c_void_p]
-        init_tensor: Callable[[ctypes._Pointer[struct_ggml_backend_buffer], ctypes._Pointer[struct_ggml_tensor]], ggml_status]
-        memset_tensor: Callable[[ctypes._Pointer[struct_ggml_backend_buffer], ctypes._Pointer[struct_ggml_tensor], ctypes.c_ubyte, ctypes.c_uint64, ctypes.c_uint64], None]
-        set_tensor: Callable[[ctypes._Pointer[struct_ggml_backend_buffer], ctypes._Pointer[struct_ggml_tensor], ctypes.c_void_p, ctypes.c_uint64, ctypes.c_uint64], None]
-        get_tensor: Callable[[ctypes._Pointer[struct_ggml_backend_buffer], ctypes._Pointer[struct_ggml_tensor], ctypes.c_void_p, ctypes.c_uint64, ctypes.c_uint64], None]
-        cpy_tensor: Callable[[ctypes._Pointer[struct_ggml_backend_buffer], ctypes._Pointer[struct_ggml_tensor], ctypes._Pointer[struct_ggml_tensor]], ctypes.c_bool]
-        clear: Callable[[ctypes._Pointer[struct_ggml_backend_buffer], ctypes.c_ubyte], None]
-        reset: Callable[[ctypes._Pointer[struct_ggml_backend_buffer]], None]
-struct_ggml_backend_buffer_i._pack_ = 1 # source:False
-struct_ggml_backend_buffer_i._fields_ = [
-    ('free_buffer', ctypes.CFUNCTYPE(None, ctypes.POINTER(struct_ggml_backend_buffer))),
-    ('get_base', ctypes.CFUNCTYPE(ctypes.POINTER(None), ctypes.POINTER(struct_ggml_backend_buffer))),
-    ('init_tensor', ctypes.CFUNCTYPE(ggml_status, ctypes.POINTER(struct_ggml_backend_buffer), ctypes.POINTER(struct_ggml_tensor))),
-    ('memset_tensor', ctypes.CFUNCTYPE(None, ctypes.POINTER(struct_ggml_backend_buffer), ctypes.POINTER(struct_ggml_tensor), ctypes.c_ubyte, ctypes.c_uint64, ctypes.c_uint64)),
-    ('set_tensor', ctypes.CFUNCTYPE(None, ctypes.POINTER(struct_ggml_backend_buffer), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(None), ctypes.c_uint64, ctypes.c_uint64)),
-    ('get_tensor', ctypes.CFUNCTYPE(None, ctypes.POINTER(struct_ggml_backend_buffer), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(None), ctypes.c_uint64, ctypes.c_uint64)),
-    ('cpy_tensor', ctypes.CFUNCTYPE(ctypes.c_bool, ctypes.POINTER(struct_ggml_backend_buffer), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor))),
-    ('clear', ctypes.CFUNCTYPE(None, ctypes.POINTER(struct_ggml_backend_buffer), ctypes.c_ubyte)),
-    ('reset', ctypes.CFUNCTYPE(None, ctypes.POINTER(struct_ggml_backend_buffer))),
-]
-
 @ctypes_function_for_shared_library('libggml-base.so')("ggml_backend_buffer_init", [ggml_backend_buffer_type_t, struct_ggml_backend_buffer_i, ctypes.POINTER(None), size_t], ggml_backend_buffer_t, enabled=True)
 def ggml_backend_buffer_init(buft: ggml_backend_buffer_type_t, iface: struct_ggml_backend_buffer_i, context: ctypes.c_void_p, size: size_t) -> ggml_backend_buffer_t:
     ...
@@ -3551,6 +3578,24 @@ def ggml_backend_buffer_init(buft: ggml_backend_buffer_type_t, iface: struct_ggm
 def ggml_backend_buffer_copy_tensor(src: ctypes._Pointer[struct_ggml_tensor], dst: ctypes._Pointer[struct_ggml_tensor]) -> ctypes.c_bool:
     ...
 
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_backend_multi_buffer_alloc_buffer", [ctypes.POINTER(ctypes.POINTER(struct_ggml_backend_buffer)), size_t], ggml_backend_buffer_t, enabled=True)
+def ggml_backend_multi_buffer_alloc_buffer(buffers: ctypes._Pointer[ctypes._Pointer[struct_ggml_backend_buffer]], n_buffers: size_t) -> ggml_backend_buffer_t:
+    ...
+
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_backend_buffer_is_multi_buffer", [ggml_backend_buffer_t], ctypes.c_bool, enabled=True)
+def ggml_backend_buffer_is_multi_buffer(buffer: ggml_backend_buffer_t) -> ctypes.c_bool:
+    ...
+
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_backend_multi_buffer_set_usage", [ggml_backend_buffer_t, ggml_backend_buffer_usage], None, enabled=True)
+def ggml_backend_multi_buffer_set_usage(buffer: ggml_backend_buffer_t, usage: ggml_backend_buffer_usage) -> None:
+    ...
+
+@ctypes_function_for_shared_library('libggml.so')("ggml_backend_register", [ggml_backend_reg_t], None, enabled=True)
+def ggml_backend_register(reg: ggml_backend_reg_t) -> None:
+    ...
+
+ggml_backend_init_t = ctypes.CFUNCTYPE(ctypes.POINTER(struct_ggml_backend_reg))
+ggml_backend_score_t = ctypes.CFUNCTYPE(ctypes.c_int32)
 @ctypes_function_for_shared_library('FIXME_STUB')("ggml_are_same_layout", [ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor)], ctypes.c_bool, enabled=False)
 def ggml_are_same_layout(a: ctypes._Pointer[struct_ggml_tensor], b: ctypes._Pointer[struct_ggml_tensor]) -> ctypes.c_bool:
     ...
@@ -3571,18 +3616,6 @@ def ggml_backend_multi_buffer_free_buffer(buffer: ggml_backend_buffer_t) -> None
 
 @ctypes_function_for_shared_library('FIXME_STUB')("ggml_backend_multi_buffer_clear", [ggml_backend_buffer_t, uint8_t], None, enabled=False)
 def ggml_backend_multi_buffer_clear(buffer: ggml_backend_buffer_t, value: uint8_t) -> None:
-    ...
-
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_backend_multi_buffer_alloc_buffer", [ctypes.POINTER(ctypes.POINTER(struct_ggml_backend_buffer)), size_t], ggml_backend_buffer_t, enabled=True)
-def ggml_backend_multi_buffer_alloc_buffer(buffers: ctypes._Pointer[ctypes._Pointer[struct_ggml_backend_buffer]], n_buffers: size_t) -> ggml_backend_buffer_t:
-    ...
-
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_backend_buffer_is_multi_buffer", [ggml_backend_buffer_t], ctypes.c_bool, enabled=True)
-def ggml_backend_buffer_is_multi_buffer(buffer: ggml_backend_buffer_t) -> ctypes.c_bool:
-    ...
-
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_backend_multi_buffer_set_usage", [ggml_backend_buffer_t, ggml_backend_buffer_usage], None, enabled=True)
-def ggml_backend_multi_buffer_set_usage(buffer: ggml_backend_buffer_t, usage: ggml_backend_buffer_usage) -> None:
     ...
 
 @ctypes_function_for_shared_library('FIXME_STUB')("ggml_dup_tensor_layout", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor)], ctypes.POINTER(struct_ggml_tensor), enabled=False)
@@ -3749,13 +3782,14 @@ struct_ggml_object._fields_ = [
 ggml_init_params = struct_ggml_init_params
 ggml_tensor = struct_ggml_tensor
 ggml_backend_buffer = struct_ggml_backend_buffer
+ggml_backend_buffer_type = struct_ggml_backend_buffer_type
+ggml_backend_buffer_i = struct_ggml_backend_buffer_i
 ggml_object = struct_ggml_object
 ggml_context = struct_ggml_context
 ggml_cgraph = struct_ggml_cgraph
 ggml_type_traits = struct_ggml_type_traits
 ggml_threadpool_params = struct_ggml_threadpool_params
 ggml_threadpool = struct_ggml_threadpool
-ggml_backend_buffer_type = struct_ggml_backend_buffer_type
 ggml_backend_device = struct_ggml_backend_device
 ggml_backend_buffer_type_i = struct_ggml_backend_buffer_type_i
 ggml_backend = struct_ggml_backend
@@ -3777,19 +3811,19 @@ ggml_cplan = struct_ggml_cplan
 ggml_type_traits_cpu = struct_ggml_type_traits_cpu
 ggml_logger_state = struct_ggml_logger_state
 ggml_context_container = struct_ggml_context_container
-ggml_backend_buffer_i = struct_ggml_backend_buffer_i
 ggml_backend_multi_buffer_context = struct_ggml_backend_multi_buffer_context
 if TYPE_CHECKING:
     ggml_init_params_p = ctypes._Pointer[struct_ggml_init_params]
     ggml_tensor_p = ctypes._Pointer[struct_ggml_tensor]
     ggml_backend_buffer_p = ctypes._Pointer[struct_ggml_backend_buffer]
+    ggml_backend_buffer_type_p = ctypes._Pointer[struct_ggml_backend_buffer_type]
+    ggml_backend_buffer_i_p = ctypes._Pointer[struct_ggml_backend_buffer_i]
     ggml_object_p = ctypes._Pointer[struct_ggml_object]
     ggml_context_p = ctypes._Pointer[struct_ggml_context]
     ggml_cgraph_p = ctypes._Pointer[struct_ggml_cgraph]
     ggml_type_traits_p = ctypes._Pointer[struct_ggml_type_traits]
     ggml_threadpool_params_p = ctypes._Pointer[struct_ggml_threadpool_params]
     ggml_threadpool_p = ctypes._Pointer[struct_ggml_threadpool]
-    ggml_backend_buffer_type_p = ctypes._Pointer[struct_ggml_backend_buffer_type]
     ggml_backend_device_p = ctypes._Pointer[struct_ggml_backend_device]
     ggml_backend_buffer_type_i_p = ctypes._Pointer[struct_ggml_backend_buffer_type_i]
     ggml_backend_p = ctypes._Pointer[struct_ggml_backend]
@@ -3811,19 +3845,19 @@ if TYPE_CHECKING:
     ggml_type_traits_cpu_p = ctypes._Pointer[struct_ggml_type_traits_cpu]
     ggml_logger_state_p = ctypes._Pointer[struct_ggml_logger_state]
     ggml_context_container_p = ctypes._Pointer[struct_ggml_context_container]
-    ggml_backend_buffer_i_p = ctypes._Pointer[struct_ggml_backend_buffer_i]
     ggml_backend_multi_buffer_context_p = ctypes._Pointer[struct_ggml_backend_multi_buffer_context]
 else:
     ggml_init_params_p = ctypes.POINTER(struct_ggml_init_params)
     ggml_tensor_p = ctypes.POINTER(struct_ggml_tensor)
     ggml_backend_buffer_p = ctypes.POINTER(struct_ggml_backend_buffer)
+    ggml_backend_buffer_type_p = ctypes.POINTER(struct_ggml_backend_buffer_type)
+    ggml_backend_buffer_i_p = ctypes.POINTER(struct_ggml_backend_buffer_i)
     ggml_object_p = ctypes.POINTER(struct_ggml_object)
     ggml_context_p = ctypes.POINTER(struct_ggml_context)
     ggml_cgraph_p = ctypes.POINTER(struct_ggml_cgraph)
     ggml_type_traits_p = ctypes.POINTER(struct_ggml_type_traits)
     ggml_threadpool_params_p = ctypes.POINTER(struct_ggml_threadpool_params)
     ggml_threadpool_p = ctypes.POINTER(struct_ggml_threadpool)
-    ggml_backend_buffer_type_p = ctypes.POINTER(struct_ggml_backend_buffer_type)
     ggml_backend_device_p = ctypes.POINTER(struct_ggml_backend_device)
     ggml_backend_buffer_type_i_p = ctypes.POINTER(struct_ggml_backend_buffer_type_i)
     ggml_backend_p = ctypes.POINTER(struct_ggml_backend)
@@ -3845,7 +3879,6 @@ else:
     ggml_type_traits_cpu_p = ctypes.POINTER(struct_ggml_type_traits_cpu)
     ggml_logger_state_p = ctypes.POINTER(struct_ggml_logger_state)
     ggml_context_container_p = ctypes.POINTER(struct_ggml_context_container)
-    ggml_backend_buffer_i_p = ctypes.POINTER(struct_ggml_backend_buffer_i)
     ggml_backend_multi_buffer_context_p = ctypes.POINTER(struct_ggml_backend_multi_buffer_context)
 __all__ = \
     ['GGML_BACKEND_BUFFER_USAGE_ANY',
@@ -3924,9 +3957,10 @@ __all__ = \
     'GGML_TYPE_Q8_0', 'GGML_TYPE_Q8_1', 'GGML_TYPE_Q8_K',
     'GGML_TYPE_TQ1_0', 'GGML_TYPE_TQ2_0', 'GGML_UNARY_OP_ABS',
     'GGML_UNARY_OP_COUNT', 'GGML_UNARY_OP_ELU', 'GGML_UNARY_OP_EXP',
-    'GGML_UNARY_OP_GELU', 'GGML_UNARY_OP_GELU_QUICK',
-    'GGML_UNARY_OP_HARDSIGMOID', 'GGML_UNARY_OP_HARDSWISH',
-    'GGML_UNARY_OP_NEG', 'GGML_UNARY_OP_RELU', 'GGML_UNARY_OP_SGN',
+    'GGML_UNARY_OP_GELU', 'GGML_UNARY_OP_GELU_ERF',
+    'GGML_UNARY_OP_GELU_QUICK', 'GGML_UNARY_OP_HARDSIGMOID',
+    'GGML_UNARY_OP_HARDSWISH', 'GGML_UNARY_OP_NEG',
+    'GGML_UNARY_OP_RELU', 'GGML_UNARY_OP_SGN',
     'GGML_UNARY_OP_SIGMOID', 'GGML_UNARY_OP_SILU',
     'GGML_UNARY_OP_STEP', 'GGML_UNARY_OP_TANH', 'fmt_size',
     'ggml_abort', 'ggml_abort_callback', 'ggml_abs',
@@ -4021,9 +4055,9 @@ __all__ = \
     'ggml_backend_graph_plan_t', 'ggml_backend_guid',
     'ggml_backend_i', 'ggml_backend_i_p', 'ggml_backend_init_best',
     'ggml_backend_init_by_name', 'ggml_backend_init_by_type',
-    'ggml_backend_is_cpu', 'ggml_backend_is_cuda',
-    'ggml_backend_load', 'ggml_backend_load_all',
-    'ggml_backend_load_all_from_path',
+    'ggml_backend_init_t', 'ggml_backend_is_cpu',
+    'ggml_backend_is_cuda', 'ggml_backend_load',
+    'ggml_backend_load_all', 'ggml_backend_load_all_from_path',
     'ggml_backend_multi_buffer_alloc_buffer',
     'ggml_backend_multi_buffer_clear',
     'ggml_backend_multi_buffer_context',
@@ -4036,8 +4070,8 @@ __all__ = \
     'ggml_backend_reg_get', 'ggml_backend_reg_get_proc_address',
     'ggml_backend_reg_i', 'ggml_backend_reg_i_p',
     'ggml_backend_reg_name', 'ggml_backend_reg_p',
-    'ggml_backend_reg_t', 'ggml_backend_sched',
-    'ggml_backend_sched_alloc_graph',
+    'ggml_backend_reg_t', 'ggml_backend_register',
+    'ggml_backend_sched', 'ggml_backend_sched_alloc_graph',
     'ggml_backend_sched_alloc_splits',
     'ggml_backend_sched_backend_from_buffer',
     'ggml_backend_sched_backend_id',
@@ -4061,7 +4095,8 @@ __all__ = \
     'ggml_backend_sched_set_tensor_backend',
     'ggml_backend_sched_split', 'ggml_backend_sched_split_graph',
     'ggml_backend_sched_split_p', 'ggml_backend_sched_synchronize',
-    'ggml_backend_sched_t', 'ggml_backend_set_abort_callback_t',
+    'ggml_backend_sched_t', 'ggml_backend_score_t',
+    'ggml_backend_set_abort_callback_t',
     'ggml_backend_set_n_threads_t',
     'ggml_backend_split_buffer_type_t', 'ggml_backend_supports_buft',
     'ggml_backend_supports_op', 'ggml_backend_synchronize',
@@ -4124,24 +4159,24 @@ __all__ = \
     'ggml_gallocr_get_buffer_size', 'ggml_gallocr_new',
     'ggml_gallocr_new_n', 'ggml_gallocr_p', 'ggml_gallocr_reserve',
     'ggml_gallocr_reserve_n', 'ggml_gallocr_t',
-    'ggml_gated_linear_attn', 'ggml_gelu', 'ggml_gelu_inplace',
-    'ggml_gelu_quick', 'ggml_gelu_quick_inplace', 'ggml_get_data',
-    'ggml_get_data_f32', 'ggml_get_f32_1d', 'ggml_get_f32_nd',
-    'ggml_get_first_tensor', 'ggml_get_i32_1d', 'ggml_get_i32_nd',
-    'ggml_get_max_tensor_size', 'ggml_get_mem_buffer',
-    'ggml_get_mem_size', 'ggml_get_name', 'ggml_get_next_tensor',
-    'ggml_get_no_alloc', 'ggml_get_rel_pos', 'ggml_get_rows',
-    'ggml_get_rows_back', 'ggml_get_tensor', 'ggml_get_type_traits',
-    'ggml_get_type_traits_cpu', 'ggml_get_unary_op',
-    'ggml_graph_add_node', 'ggml_graph_clear', 'ggml_graph_compute',
-    'ggml_graph_compute_with_ctx', 'ggml_graph_cpy',
-    'ggml_graph_dump_dot', 'ggml_graph_dump_dot_leaf_edge',
-    'ggml_graph_dump_dot_node_edge', 'ggml_graph_dup',
-    'ggml_graph_export', 'ggml_graph_find', 'ggml_graph_get_grad',
-    'ggml_graph_get_grad_acc', 'ggml_graph_get_parent',
-    'ggml_graph_get_tensor', 'ggml_graph_import',
-    'ggml_graph_n_nodes', 'ggml_graph_nbytes', 'ggml_graph_node',
-    'ggml_graph_nodes', 'ggml_graph_overhead',
+    'ggml_gated_linear_attn', 'ggml_gelu', 'ggml_gelu_erf',
+    'ggml_gelu_erf_inplace', 'ggml_gelu_inplace', 'ggml_gelu_quick',
+    'ggml_gelu_quick_inplace', 'ggml_get_data', 'ggml_get_data_f32',
+    'ggml_get_f32_1d', 'ggml_get_f32_nd', 'ggml_get_first_tensor',
+    'ggml_get_i32_1d', 'ggml_get_i32_nd', 'ggml_get_max_tensor_size',
+    'ggml_get_mem_buffer', 'ggml_get_mem_size', 'ggml_get_name',
+    'ggml_get_next_tensor', 'ggml_get_no_alloc', 'ggml_get_rel_pos',
+    'ggml_get_rows', 'ggml_get_rows_back', 'ggml_get_tensor',
+    'ggml_get_type_traits', 'ggml_get_type_traits_cpu',
+    'ggml_get_unary_op', 'ggml_graph_add_node', 'ggml_graph_clear',
+    'ggml_graph_compute', 'ggml_graph_compute_with_ctx',
+    'ggml_graph_cpy', 'ggml_graph_dump_dot',
+    'ggml_graph_dump_dot_leaf_edge', 'ggml_graph_dump_dot_node_edge',
+    'ggml_graph_dup', 'ggml_graph_export', 'ggml_graph_find',
+    'ggml_graph_get_grad', 'ggml_graph_get_grad_acc',
+    'ggml_graph_get_parent', 'ggml_graph_get_tensor',
+    'ggml_graph_import', 'ggml_graph_n_nodes', 'ggml_graph_nbytes',
+    'ggml_graph_node', 'ggml_graph_nodes', 'ggml_graph_overhead',
     'ggml_graph_overhead_custom', 'ggml_graph_plan',
     'ggml_graph_print', 'ggml_graph_reset', 'ggml_graph_size',
     'ggml_graph_view', 'ggml_group_norm', 'ggml_group_norm_impl',
@@ -4187,14 +4222,14 @@ __all__ = \
     'ggml_print_object', 'ggml_print_objects', 'ggml_quantize_chunk',
     'ggml_quantize_free', 'ggml_quantize_init',
     'ggml_quantize_requires_imatrix', 'ggml_relu',
-    'ggml_relu_inplace', 'ggml_repeat', 'ggml_repeat_back',
-    'ggml_reset', 'ggml_reshape', 'ggml_reshape_1d',
-    'ggml_reshape_2d', 'ggml_reshape_3d', 'ggml_reshape_4d',
-    'ggml_rms_norm', 'ggml_rms_norm_back', 'ggml_rms_norm_impl',
-    'ggml_rms_norm_inplace', 'ggml_rope', 'ggml_rope_custom',
-    'ggml_rope_custom_inplace', 'ggml_rope_ext', 'ggml_rope_ext_back',
-    'ggml_rope_ext_inplace', 'ggml_rope_impl', 'ggml_rope_inplace',
-    'ggml_rope_multi', 'ggml_rope_multi_back',
+    'ggml_relu_inplace', 'ggml_repeat', 'ggml_repeat_4d',
+    'ggml_repeat_back', 'ggml_reset', 'ggml_reshape',
+    'ggml_reshape_1d', 'ggml_reshape_2d', 'ggml_reshape_3d',
+    'ggml_reshape_4d', 'ggml_rms_norm', 'ggml_rms_norm_back',
+    'ggml_rms_norm_impl', 'ggml_rms_norm_inplace', 'ggml_rope',
+    'ggml_rope_custom', 'ggml_rope_custom_inplace', 'ggml_rope_ext',
+    'ggml_rope_ext_back', 'ggml_rope_ext_inplace', 'ggml_rope_impl',
+    'ggml_rope_inplace', 'ggml_rope_multi', 'ggml_rope_multi_back',
     'ggml_rope_yarn_corr_dim', 'ggml_rope_yarn_corr_dims',
     'ggml_row_size', 'ggml_rwkv_wkv6', 'ggml_rwkv_wkv7', 'ggml_scale',
     'ggml_scale_impl', 'ggml_scale_inplace', 'ggml_scale_mode',

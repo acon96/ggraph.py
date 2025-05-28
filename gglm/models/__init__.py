@@ -24,7 +24,7 @@ class GGMLBackendType(enum.Enum):
 
 class GGMLContextType(enum.Enum):
     GGUF = enum.auto()
-    COMPUTE = enum.auto()
+    COMPUTE_GRAPH = enum.auto()
     INPUT_OUTPUT = enum.auto()
 
 GGML_TYPE_TO_NUMPY_DTYPE = {
@@ -42,13 +42,15 @@ class GGMLModel:
     context_params: ContextParams
     model_params: ModelParams
     batch_params: BatchParams
-    loaded_tensors: Dict[str, Tensor]
-    created_tensors: Dict[str, Tensor]
-    input_tensors: Dict[str, Tensor]
     ggml_ctx: dict[GGMLContextType, wrapper.GGMLContext]
+    backend: wrapper.ggml_backend_p
+    backend_type: GGMLBackendType
     compute_graph: Optional[wrapper.ggml_cgraph_p]
+    graph_allocr: wrapper.ggml_gallocr_p
     parse_context: ParseContext
     lowering_context: LoweringContext
+    gguf_tensors: Dict[str, Tensor]
+    io_tensors: Dict[str, Tensor]
 
     def __init__(self, model_path: str, backend_type: GGMLBackendType = GGMLBackendType.CPU, **model_kwargs):
         # self.shard = shard
@@ -71,7 +73,6 @@ class GGMLModel:
         ))
         params.update(model_kwargs)
         self.context_params = ContextParams(**params)
-        self.batch_params = BatchParams(n_tokens=self.context_params.n_ctx, kv_output_pos=0)
 
         arch = str(gguf_kv["general.architecture"].contents())
         try:
@@ -79,14 +80,16 @@ class GGMLModel:
         except ParseError as exception:
             raise RuntimeError("Failed to parse") from exception
         
-        self.lowering_context = LoweringContext.from_parse_context(self.parse_context, self.batch_params)
+        self.lowering_context = LoweringContext.from_parse_context(self.parse_context, BatchParams(n_tokens=self.context_params.n_ctx, kv_output_pos=0), gguf_tensors={}, io_tensors={})
         
         self._init_ggml_backend()
+
+        self.gguf_tensors = {}
+        self.io_tensors = {}
         
         self.ggml_ctx = {
             GGMLContextType.GGUF: self._load_model(),
             GGMLContextType.INPUT_OUTPUT: self._allocate_inputs(),
-            GGMLContextType.COMPUTE: None,
         }
 
         self.compute_graph = None
@@ -108,80 +111,65 @@ class GGMLModel:
 
         if not self.backend:
             raise RuntimeError("Failed to initialize backend!")
+        
+        if self.backend_type == GGMLBackendType.CPU:
+            logging.debug(f"Using {self.context_params.n_threads} threads for computation")
+            wrapper.ggml_backend_cpu_set_n_threads(self.backend, self.context_params.n_threads)
+
+        backend_buffer_type = wrapper.ggml_backend_get_default_buffer_type(self.backend)
+        if not backend_buffer_type:
+            raise RuntimeError("Failed to get backend buffer type")
+        
+        self.graph_allocr = wrapper.ggml_gallocr_new(backend_buffer_type)
+        if not self.graph_allocr:
+            raise RuntimeError("Failed to create new graph memory allocator!")
 
     def _load_model(self) -> wrapper.GGMLContext:
         logging.info("Loading tensors...")
-        # model_bytes = 0
-        # for tensor in self.reader.tensors:
-        #     model_bytes += tensor.n_bytes
-
-        ctx_size = wrapper.ggml_tensor_overhead() * len(self.reader.tensors)
-        gguf_context = wrapper.GGMLContext(ctx_size, backend=self.backend)
+        gguf_context = wrapper.GGMLContext(max_tensors=len(self.reader.tensors))
         tensors_and_data: list[tuple[Tensor, np.ndarray]] = []
         for t in self.reader.tensors:
             tensor = gguf_context.add_reader_tensor(t)
             tensor.allocate()
             tensors_and_data.append((tensor, t.data))
+            self.gguf_tensors[tensor.name] = tensor
 
         self.model_buffer = wrapper.ggml_backend_alloc_ctx_tensors(gguf_context.ctx, self.backend)
+        logging.info(f"Allocated {self.model_buffer.contents.size} bytes for gguf tensors")
 
         for tensor, np_tensor in tensors_and_data:
             logging.debug(f"Loading Tensor - name: {tensor.name}, shape: {tensor.shape}, type: {tensor.ptr.contents.type}")
             tensor.data = np_tensor
         
         return gguf_context
-
-    def _get_ctx_size(self, ctx_type: GGMLContextType) -> int:
-        """Calculate the total size of the GGML context buffer based on the parsed model file"""
-        tensors_to_load = self.lowering_context.gguf_tensors.values()
-        tensors_to_create = self.parse_context.created_tensors
-        intermediate_tensors = self.lowering_context.intermediate_tensors
-
-        if ctx_type == GGMLContextType.GGUF:
-            model_bytes = 0
-            for tensor in tensors_to_load:
-                model_bytes += tensor.n_bytes
-            return model_bytes
-        elif ctx_type == GGMLContextType.INPUT_OUTPUT:
-            context_bytes = 0
-            for tensor in tensors_to_create:
-                context_bytes += wrapper.ggml_tensor_size(tensor.shape, tensor.type)
-
-            for tensor in intermediate_tensors:
-                if tensor.is_view:
-                    continue
-                context_bytes += tensor.n_bytes_ctx
-            return context_bytes
-        elif ctx_type == GGMLContextType.COMPUTE:
-            num_tensors = len(tensors_to_load) + len(tensors_to_create) + len(intermediate_tensors)
-            graph_bytes = wrapper.ggml_graph_overhead_custom(num_tensors * 5, False) + wrapper.ggml_tensor_overhead() * num_tensors
-            return graph_bytes
         
-    def _allocate_inputs(self):
+    def _allocate_inputs(self) -> wrapper.GGMLContext:
         # Set up inputs
-        ctx_size = wrapper.ggml_tensor_overhead() * len(self.parse_context.created_tensors)
-        io_ctx = wrapper.GGMLContext(ctx_size, backend=self.backend)
+        io_ctx = wrapper.GGMLContext(max_tensors=len(self.parse_context.created_tensors))
         for tensor in self.parse_context.created_tensors:
             vl_tensor = io_ctx.add_tensor_with_variable_shape(tensor.name, tensor.shape, tensor.type)
             vl_tensor.lowering_ctx = self.lowering_context
 
             vl_tensor.allocate()
+            self.io_tensors[tensor.name] = vl_tensor
 
         self.inputs_buffer = wrapper.ggml_backend_alloc_ctx_tensors(io_ctx.ctx, self.backend)
         if not self.inputs_buffer:
             raise RuntimeError("Failed to allocate buffer to store inputs!")
         wrapper.ggml_backend_buffer_clear(self.inputs_buffer, 0)
 
+        logging.info(f"Allocated {self.inputs_buffer.contents.size} bytes for input tensors")
+
         return io_ctx
 
-    def _build_forward(self, batch_params: BatchParams):
+    def _build_forward(self):
         """Build the GGM Graph from the parsed AST and ensure the tensors are loaded"""
-        self.lowering_context = LoweringContext.from_parse_context(self.parse_context, batch_params)
 
         # Set up compute graph
-        graph_size = (len(self.lowering_context.gguf_tensors) + len(self.lowering_context.graph)) * 5
+        graph_size = (len(self.gguf_tensors) + len(self.lowering_context.graph)) * 5
+
         logging.debug(f"Creating GGML graph with {graph_size} nodes...")
-        compute_ctx = self.ggml_ctx[GGMLContextType.COMPUTE]
+        compute_ctx = wrapper.GGMLContext(max_tensors=graph_size, graph_size=graph_size)
         gf = wrapper.ggml_new_graph_custom(compute_ctx.ctx, graph_size, False)
 
         try:
@@ -198,39 +186,32 @@ class GGMLModel:
         
         logging.debug("Expanding graph...")
         wrapper.ggml_build_forward_expand(gf, output_tensor.ptr)
-        # wrapper.ggml_graph_dump_dot(gf, ctypes.POINTER(wrapper.ggml_cgraph)(), b"graph.dot")
+        wrapper.ggml_graph_dump_dot(gf, ctypes.POINTER(wrapper.ggml_cgraph)(), b"graph.dot")
 
         self.compute_graph = gf
+        self.ggml_ctx[GGMLContextType.COMPUTE_GRAPH] = compute_ctx
+        
+        wrapper.ggml_gallocr_alloc_graph(self.graph_allocr, self.compute_graph)
     
-    def __call__(self, **kwargs: List[int | float]):
+    def __call__(self, **kwargs: int | List[int | float]):
         """Run the GGML model with the provided input tensors"""
-        if not self.compute_graph:
-            # TODO: change this if statement to detect if the batch params have changed
-            # and if so, re-build the graph
+        n_tokens = len(kwargs.get("input_tokens", [1]))
+        kv_output_pos = kwargs.pop("kv_output_pos", 0)
+        cur_batch_params = BatchParams(n_tokens=n_tokens, kv_output_pos=kv_output_pos)
+        if not self.compute_graph or self.batch_params != cur_batch_params:
+            self.lowering_context = LoweringContext.from_parse_context(self.parse_context, cur_batch_params, self.gguf_tensors, self.io_tensors)
+            self.batch_params = cur_batch_params
+            self.ggml_ctx[GGMLContextType.INPUT_OUTPUT].reallocate(self.lowering_context)
             self._build_forward()
 
         if not self.backend:
             raise RuntimeError("Cannot evaluate model without initializing the backend")
 
         for input_name in kwargs.keys():
-            input_tensor = self.input_tensors[input_name]
+            input_tensor = self.io_tensors[input_name]
             input_dtype = GGML_TYPE_TO_NUMPY_DTYPE[input_tensor.type]
 
             input_tensor.data = np.array(kwargs[input_name], dtype=input_dtype)
-
-        backend_buffer_type = wrapper.ggml_backend_get_default_buffer_type(self.backend)
-        if not backend_buffer_type:
-            raise RuntimeError()
-        
-        allocr = wrapper.ggml_gallocr_new(backend_buffer_type)
-        if not allocr:
-            raise RuntimeError()
-        
-        wrapper.ggml_gallocr_alloc_graph(allocr, self.compute_graph)
-
-        if self.backend_type == GGMLBackendType.CPU:
-            logging.debug(f"Using {self.context_params.n_threads} threads for computation")
-            wrapper.ggml_backend_cpu_set_n_threads(self.backend, self.context_params.n_threads)
 
         wrapper.ggml_backend_graph_compute(self.backend, self.compute_graph)
 
@@ -245,4 +226,4 @@ class GGMLModel:
         return logprobs
 
     def __repr__(self):
-        return f"{self.__class__.__name__}({self.loaded_tensors.keys()})"
+        return f"{self.__class__.__name__}({self.model_params})"
