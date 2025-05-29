@@ -1,8 +1,9 @@
-from typing import Optional, Protocol
+from typing import Optional, Protocol, Any
+from dataclasses import dataclass
 import logging
 import numpy as np
 from gglm.models import GGMLModel
-from gglm.utils import BatchParams
+from gglm.utils import plot_logprob_heatmap, plot_attention_heatmap, plot_attention_heatmap_avg
 
 def pad(input_tokens: list[int | float], n_ctx: int, value: int | float):
     if isinstance(value, float):
@@ -69,6 +70,14 @@ class TokenizerProtocol(Protocol):
     def chat_template(self, value: dict[str, str]):
         ...
 
+@dataclass(kw_only=True)
+class InferenceResult:
+    """Result of the inference."""
+    generated_tokens: list[int]
+    num_generated_tokens: int
+    generated_text: str
+    conversation: Optional[list[dict[str, str]]] = None
+
 class GGMLInferenceEngine:
     """Inference engine for GGML models."""
 
@@ -82,7 +91,7 @@ class GGMLInferenceEngine:
         chat_template_kv = self.model.model_params._data["tokenizer.chat_template"]
         tokenizer.chat_template = chat_template_kv.contents()
 
-    def generate(self, *, input_prompt: Optional[str] = None, input_tokens: Optional[list[int]] = None, input_conversation: Optional[list[dict[str, str]]] = None) -> str | list[int] | list[dict[str, str]]:
+    def generate(self, *, input_prompt: Optional[str] = None, input_tokens: Optional[list[int]] = None, input_conversation: Optional[list[dict[str, str]]] = None) -> InferenceResult:
         """Generates text from the input prompt or tokens."""
         n_ctx = self.model.context_params.n_ctx
         stop_tokens = self.model.model_params.stop_tokens
@@ -104,44 +113,43 @@ class GGMLInferenceEngine:
 
         # process the prompt
         n_tokens = len(input_ids)
-        input_positions = [float(x) for x in range(n_tokens)]
-        kq_mask = causal_mask(n_ctx=n_tokens).flatten().tolist()
-
+        kq_mask = causal_mask(n_ctx=n_ctx)
+       
         logging.debug(f"Processing {len(input_ids)} input tokens with n_ctx={n_ctx}")
-        self.model(
+        result = self.model(
             input_tokens=input_ids,
-            input_positions=input_positions,
-            kq_mask=kq_mask,
+            input_positions=[float(x) for x in range(n_tokens)],
+            kq_mask=kq_mask[:n_tokens].flatten().tolist(),
             kv_output_pos=0
         )
 
+        logits = result[n_tokens - 1]
+        
+        last_output = sample_from_logits(logits=logits, temperature=0.7, top_p=0.95, top_k=40)
+        outputs = [last_output]
+        # logging.debug(f"Generated token: {last_output} ({self.tokenizer.decode(outputs)})")
+
         # process next tokens one by one
-        kq_mask = causal_mask(n_ctx=n_ctx).flatten().tolist()
-        last_output = input_ids[-1]
-        outputs = []
         while len(input_ids) + len(outputs) < n_ctx and last_output not in stop_tokens:
-            cur_pos = len(input_ids) - 1
+            cur_pos = len(input_ids) + len(outputs) - 1
             result = self.model(
                 input_tokens=[last_output],
                 input_positions=[cur_pos],
                 kq_mask=kq_mask[cur_pos],
-                kv_output_pos=len(input_ids) + len(outputs),
+                kv_output_pos=cur_pos,
             )
 
             logits = result[0]
 
             last_output = sample_from_logits(logits=logits, temperature=0.7, top_p=0.95, top_k=40)
             outputs.append(last_output)
-            logging.debug(f"Generated token: {last_output} ({self.tokenizer.decode([last_output])})")
+            # logging.debug(f"Generated token: {last_output} ({self.tokenizer.decode([last_output])})")
 
         if input_conversation is not None:
             output_text = self.tokenizer.decode(outputs)
             output_conversation = input_conversation.copy()
             output_conversation.append({"role": "assistant", "content": output_text})
-            return output_conversation
+            return InferenceResult(generated_tokens=outputs, num_generated_tokens=len(outputs), generated_text=output_text, conversation=output_conversation)
         
-        if input_prompt is not None:
-            output_text = self.tokenizer.decode(outputs)
-            return output_text
-            
-        return outputs
+        output_text = self.tokenizer.decode(outputs)
+        return InferenceResult(generated_tokens=outputs, num_generated_tokens=len(outputs), generated_text=output_text)

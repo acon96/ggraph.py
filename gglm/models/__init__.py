@@ -135,7 +135,7 @@ class GGMLModel:
             self.gguf_tensors[tensor.name] = tensor
 
         self.model_buffer = wrapper.ggml_backend_alloc_ctx_tensors(gguf_context.ctx, self.backend)
-        logging.info(f"Allocated {self.model_buffer.contents.size} bytes for gguf tensors")
+        logging.info(f"Allocated {self.model_buffer.contents.size/1024.0/1024.0:.2f} MB for gguf tensors")
 
         for tensor, np_tensor in tensors_and_data:
             logging.debug(f"Loading Tensor - name: {tensor.name}, shape: {tensor.shape}, type: {tensor.ptr.contents.type}")
@@ -158,7 +158,10 @@ class GGMLModel:
             raise RuntimeError("Failed to allocate buffer to store inputs!")
         wrapper.ggml_backend_buffer_clear(self.inputs_buffer, 0)
 
-        logging.info(f"Allocated {self.inputs_buffer.contents.size} bytes for input tensors")
+        for tensor in self.io_tensors.values():
+            wrapper.ggml_set_zero(tensor.ptr)
+
+        logging.info(f"Allocated {self.inputs_buffer.contents.size/1024.0/1024.0:.2f} MB for input tensors")
 
         return io_ctx
 
@@ -186,7 +189,7 @@ class GGMLModel:
         
         logging.debug("Expanding graph...")
         wrapper.ggml_build_forward_expand(gf, output_tensor.ptr)
-        wrapper.ggml_graph_dump_dot(gf, ctypes.POINTER(wrapper.ggml_cgraph)(), b"graph.dot")
+        # wrapper.ggml_graph_dump_dot(gf, ctypes.POINTER(wrapper.ggml_cgraph)(), b"graph.dot")
 
         self.compute_graph = gf
         self.ggml_ctx[GGMLContextType.COMPUTE_GRAPH] = compute_ctx
@@ -203,6 +206,8 @@ class GGMLModel:
             self.batch_params = cur_batch_params
             self.ggml_ctx[GGMLContextType.INPUT_OUTPUT].reallocate(self.lowering_context)
             self._build_forward()
+        else:
+            self.batch_params = cur_batch_params
 
         if not self.backend:
             raise RuntimeError("Cannot evaluate model without initializing the backend")
