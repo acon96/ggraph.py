@@ -9,7 +9,7 @@ import numpy as np
 import numpy.typing as npt
 from gguf.gguf_reader import ReaderTensor, ReaderField
 
-from gglm.wrapper.gen import *
+from ggraph.wrapper.gen import *
 
 GGML_TYPE_TO_CTYPE = {
     GGML_TYPE_F32: ctypes.c_float,

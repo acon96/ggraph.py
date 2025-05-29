@@ -8,10 +8,10 @@ import ctypes
 import numpy as np
 from gguf.gguf_reader import GGUFReader
 
-from gglm.utils import Tensor, ModelParams, ContextParams, BatchParams, ParseError
-from gglm.models.parser import GGMLParser, ParseContext
-from gglm.models.ast import LoweringContext, produce_ggml_graph
-import gglm.wrapper as wrapper
+from ggraph.utils import Tensor, ModelParams, ContextParams, BatchParams, ParseError
+from ggraph.models.parser import GGMLParser, ParseContext
+from ggraph.models.ast import LoweringContext, produce_ggml_graph
+import ggraph.wrapper as wrapper
 
 # from exo.inference.shard import Shard
 

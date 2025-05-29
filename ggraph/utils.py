@@ -10,7 +10,7 @@ import numpy as np
 from gguf.gguf_reader import ReaderField, ReaderTensor
 from gguf.constants import Keys as GGUFKeys
 
-from gglm.wrapper import Tensor
+from ggraph.wrapper import Tensor
 
 matplotlib.use("agg")
 

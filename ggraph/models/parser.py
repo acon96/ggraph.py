@@ -7,10 +7,10 @@ import importlib.resources
 from dataclasses import dataclass, field
 from gguf import ReaderTensor
 
-from gglm.utils import ParseError
-from gglm.models import ContextParams, ModelParams
-from gglm.models.ast import ASTNode, Expression, Assignment, RepeatBlock, FunctionCall, Operand, Operation
-from gglm.wrapper import gen
+from ggraph.utils import ParseError
+from ggraph.models import ContextParams, ModelParams
+from ggraph.models.ast import ASTNode, Expression, Assignment, RepeatBlock, FunctionCall, Operand, Operation
+from ggraph.wrapper import gen
 
 logger = logging.getLogger(__name__)
 
@@ -259,7 +259,7 @@ class GGMLParser:
         """Parse a file containing a graph definition. Return the parsed graph context."""
 
         # Read the content of the provided file
-        text = importlib.resources.files("gglm.models").joinpath(file).read_text()
+        text = importlib.resources.files("ggraph.models").joinpath(file).read_text()
 
         # Run the parsing operation on the file's content and return the result
         try:

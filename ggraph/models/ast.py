@@ -8,13 +8,13 @@ from dataclasses import dataclass, field
 
 from lark import Token
 
-from gglm.utils import Tensor, ensure_args, ContextParams, ModelParams, BatchParams
-from gglm.models.parser import ParseError
-import gglm.wrapper as wrapper
-from gglm.wrapper import gen
+from ggraph.utils import Tensor, ensure_args, ContextParams, ModelParams, BatchParams
+from ggraph.models.parser import ParseError
+import ggraph.wrapper as wrapper
+from ggraph.wrapper import gen
 
 if TYPE_CHECKING:
-    from gglm.models.parser import ParseContext
+    from ggraph.models.parser import ParseContext
 
 logger = logging.getLogger(__name__)
 

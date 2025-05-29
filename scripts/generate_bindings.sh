@@ -8,7 +8,7 @@ clang2py src/ggml.c src/ggml-backend.cpp include/ggml.h include/ggml-alloc.h inc
     -l ../build/bin/libggml-base.so \
     -l ../build/bin/libggml-cpu.so \
     -l ../build/bin/libllama.so \
-    -o ../../../gglm/wrapper/gen.py 
+    -o ../../../ggraph/wrapper/gen.py 
     # -l ../build/bin/libggml-cuda.so \
 
 popd

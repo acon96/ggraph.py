@@ -2,7 +2,7 @@ from typing import Optional, Generator, Any
 from dataclasses import dataclass
 import logging
 import numpy as np
-from gglm.models import GGMLModel
+from ggraph.models import GGMLModel
 from transformers.tokenization_utils import PreTrainedTokenizerBase
 
 logger = logging.getLogger(__name__)
@@ -185,7 +185,7 @@ class GGMLInferenceEngine:
         # process next tokens one by one
         while len(input_ids) + len(outputs) < n_ctx and last_output not in stop_tokens:
             cur_pos = len(input_ids) + len(outputs) - 1
-            last_output = self._sample_token(last_output, cur_pos, kq_mask)
+            last_output = self._generate_token(last_output, cur_pos, kq_mask)
             outputs.append(last_output)
 
         if input_conversation is not None:

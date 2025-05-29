@@ -5,8 +5,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "ggraph"
-version = "0.1.0"
-description = "Python interface and utilities for GGML-based model inference, with support for custom model graphs and backends."
+version = "0.0.1"
+description = "Python interface engine and graph definition language for GGUF-based models."
 authors = [
     { name = "Alex O'Connell", email = "git@alexoconnell.net" }
 ]
@@ -24,8 +24,12 @@ dependencies = [
 Homepage = "https://github.com/acon96/ggraph.py"
 Repository = "https://github.com/acon96/ggraph.py"
 
-[tool.setuptools]
-packages = ["gglm"]
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["ggraph*"]
+
+[tool.setuptools.package-data]
+ggraph = ["*.ggml"]
 
 [project.scripts]
-"ggraph.py" = "gglm.ggraph:main"
+ggraph-cli = "ggraph.cli:main"
