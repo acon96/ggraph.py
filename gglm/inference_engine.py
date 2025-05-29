@@ -3,7 +3,7 @@ from dataclasses import dataclass
 import logging
 import numpy as np
 from gglm.models import GGMLModel
-from gglm.utils import plot_logprob_heatmap, plot_attention_heatmap, plot_attention_heatmap_avg
+from transformers.tokenization_utils import PreTrainedTokenizerBase
 
 def pad(input_tokens: list[int | float], n_ctx: int, value: int | float):
     if isinstance(value, float):
@@ -48,27 +48,10 @@ def sample_from_logits(logits: np.ndarray, *, temperature: float, top_p: float, 
     probs /= np.sum(probs, axis=-1, keepdims=True)
     return np.random.choice(len(probs), p=probs)
 
-class TokenizerProtocol(Protocol):
-    def __call__(self, text: str) -> dict[str, list[int]]:
-        ...
-
-    def decode(self, tokens: list[int]) -> str:
-        ...
-
-    def apply_chat_template(self, conversation: list[dict[str, str]], add_generation_prompt: bool) -> dict[str, list[int]]:
-        ...
-
-    @property
-    def pad_token_id(self) -> int:
-        ...
-
-    @property
-    def chat_template(self) -> dict[str, str]:
-        ...
-
-    @chat_template.setter
-    def chat_template(self, value: dict[str, str]):
-        ...
+model_arch_to_tokenizer = {
+    "qwen2": ("qwen2", "Qwen2TokenizerFast", "Qwen/Qwen-tokenizer"),
+    "qwen3": ("qwen2", "Qwen2TokenizerFast", "Qwen/Qwen-tokenizer"),
+}
 
 @dataclass(kw_only=True)
 class InferenceResult:
@@ -82,14 +65,34 @@ class GGMLInferenceEngine:
     """Inference engine for GGML models."""
 
     model: GGMLModel
-    tokenizer: Optional[TokenizerProtocol]
+    tokenizer: Optional[PreTrainedTokenizerBase]
 
-    def __init__(self, gguf_path: str, tokenizer: Optional[TokenizerProtocol] = None,  n_ctx: int = 32, **kwargs):
+    def __init__(self, gguf_path: str, n_ctx: int = 32, **kwargs):
         self.model = GGMLModel(gguf_path, n_ctx=n_ctx, **kwargs)
+        
+        # map and load tokenizer
+        tokenizer_args = model_arch_to_tokenizer.get(self.model.model_params.arch, None)
+        if tokenizer_args is None:
+            raise ValueError(f"Unknown tokenizer for model architecture: {self.model.model_params.arch}")
+        
+        tokenizer_package, tokenizer_class, tokenizer_path = tokenizer_args
+        try:
+            tokenizer_class = getattr(__import__(f"transformers.models.{tokenizer_package}"), tokenizer_class)
+        except ImportError:
+            raise ImportError(f"Tokenizer class {tokenizer_class} not found in transformers library.")
+        try:
+            tokenizer = tokenizer_class.from_pretrained(tokenizer_path, use_fast=True)
+        except Exception as e:
+            raise RuntimeError(f"Failed to load tokenizer from {tokenizer_path}: {e}")
+        if not isinstance(tokenizer, PreTrainedTokenizerBase):
+            raise TypeError(f"Expected tokenizer to be a subclass of PreTrainedTokenizerBase, got {type(tokenizer)}")
+        logging.debug(f"Loaded tokenizer: transformers.models.{tokenizer_package}.{tokenizer_class}.from_pretrained('{tokenizer_path}')")
+
         self.tokenizer = tokenizer
 
-        chat_template_kv = self.model.model_params._data["tokenizer.chat_template"]
-        tokenizer.chat_template = chat_template_kv.contents()
+        if self.tokenizer:
+            chat_template_kv = self.model.model_params._data["tokenizer.chat_template"]
+            tokenizer.chat_template = chat_template_kv.contents()
 
     def generate(self, *, input_prompt: Optional[str] = None, input_tokens: Optional[list[int]] = None, input_conversation: Optional[list[dict[str, str]]] = None) -> InferenceResult:
         """Generates text from the input prompt or tokens."""

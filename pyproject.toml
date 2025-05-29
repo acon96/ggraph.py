@@ -10,7 +10,7 @@ description = "Python interface and utilities for GGML-based model inference, wi
 authors = [
     { name = "Alex O'Connell", email = "git@alexoconnell.net" }
 ]
-license = { text = "MIT" }
+license = "MIT"
 readme = "README.md"
 requires-python = ">=3.8"
 dependencies = [
@@ -24,6 +24,8 @@ dependencies = [
 Homepage = "https://github.com/acon96/ggraph.py"
 Repository = "https://github.com/acon96/ggraph.py"
 
-[tool.setuptools.packages.find]
-where = ["gglm"]
-include = ["gglm*"]
+[tool.setuptools]
+packages = ["gglm"]
+
+[project.scripts]
+"ggraph.py" = "gglm.ggraph:main"

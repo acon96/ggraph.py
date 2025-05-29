@@ -82,6 +82,10 @@ class ModelParams:
             return self[key]
         except KeyError:
             return default
+        
+    @property
+    def arch(self) -> str:
+        return self._arch
 
     @property
     def n_ctx(self) -> int:

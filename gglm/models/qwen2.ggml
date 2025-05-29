@@ -1,4 +1,11 @@
 model Qwen2 {
+    # tokenizer {
+    #     type = transformers
+    #     package = qwen2
+    #     class_name = Qwen2TokenizerFast
+    #     repo_name = Qwen/Qwen-tokenizer
+    # }
+
     tensors {
         input_tokens: I32, [params.batch.n_tokens], is_input
         input_positions: I32, [params.batch.n_tokens], is_input
