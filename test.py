@@ -10,7 +10,8 @@ from gglm.wrapper import gen
 from gglm.inference_engine import GGMLInferenceEngine
 from transformers.models.qwen2 import Qwen2TokenizerFast
 
-gguf_path = "/mnt/c/Users/salex/.cache/lm-studio/models/lmstudio-community/Qwen3-0.6B-GGUF/Qwen3-0.6B-Q8_0.gguf"
+# gguf_path = "/mnt/c/Users/salex/.cache/lm-studio/models/lmstudio-community/Qwen3-0.6B-GGUF/Qwen3-0.6B-Q8_0.gguf"
+gguf_path = "./models/Qwen2.5-0.5B-Instruct-Q6_K.gguf"
 
 np.set_printoptions(threshold=100000, linewidth=128)
 
