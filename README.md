@@ -22,13 +22,11 @@ Below is a minimal example of running inference with a GGML model and a HuggingF
 
 ```python
 from gglm.inference_engine import GGMLInferenceEngine
-from transformers.models.qwen2 import Qwen2TokenizerFast
 
 gguf_path = "/path/to/model.gguf"  # Path to your GGML model file
 n_ctx = 256
-tokenizer = Qwen2TokenizerFast.from_pretrained("Qwen/Qwen-tokenizer")
 
-inference_engine = GGMLInferenceEngine(gguf_path, tokenizer, n_ctx=n_ctx, n_threads=12)
+inference_engine = GGMLInferenceEngine(gguf_path, n_ctx=n_ctx, n_threads=12)
 result = inference_engine.generate(input_conversation=[
     {"role": "system", "content": "You are a helpful assistant."},
     {"role": "user", "content": "What is the capital of England?"},

@@ -16,6 +16,8 @@ from gglm.wrapper import gen
 if TYPE_CHECKING:
     from gglm.models.parser import ParseContext
 
+logger = logging.getLogger(__name__)
+
 @dataclass(kw_only=True)
 class LoweringContext:
     """Stores the context of the current ast->ggml lowering operation"""
@@ -82,7 +84,7 @@ def resolve_tensor(lowering_ctx: LoweringContext, name: str, *, raise_error: boo
     if raise_error:
         raise ParseError(f"Unknown tensor {name}", source_token)
     
-    # logging.debug(f"Attempted to resolve unknown tensor {name}; graph tensors = {self.ctx.graph.keys()}")
+    # logger.debug(f"Attempted to resolve unknown tensor {name}; graph tensors = {self.ctx.graph.keys()}")
     
     return None
 
@@ -296,7 +298,7 @@ def produce_ggml_function_call_graph(lowering_ctx: LoweringContext, ctx0: wrappe
         raw_args = node.operands
 
     args = [produce_ggml_graph(lowering_ctx, ctx0, df, op) if isinstance(op, Expression) else op for op in raw_args]
-    # logging.debug(f"{func_name=} {args=} {raw_args=}")
+    # logger.debug(f"{func_name=} {args=} {raw_args=}")
 
     ggml_function = wrapper.GGML_FUNCTIONS.get(str(func_name))
     if ggml_function is not None:
@@ -307,7 +309,7 @@ def produce_ggml_function_call_graph(lowering_ctx: LoweringContext, ctx0: wrappe
         if lowering_ctx.repeat_index != None:
             result_name = result_name + f"_{lowering_ctx.repeat_index}"
         result: Tensor = ggml_function.func(ctx0, result_name, *args)
-        # logging.debug(f"{result=}")
+        # logger.debug(f"{result=}")
 
         lowering_ctx.intermediate_tensors.append(result)
         return result
@@ -323,7 +325,7 @@ def produce_ggml_function_call_graph(lowering_ctx: LoweringContext, ctx0: wrappe
             result_num = gen.ggml_element_size(args[0].ptr)
         
         if result_num is not None:
-            # logging.debug(f"{result_num=}")
+            # logger.debug(f"{result_num=}")
             return result_num
 
     raise NotImplementedError(f"Unsupported function: {func_name}")
@@ -331,7 +333,7 @@ def produce_ggml_function_call_graph(lowering_ctx: LoweringContext, ctx0: wrappe
 def produce_ggml_graph(lowering_ctx: LoweringContext, ctx0: wrapper.ggml_context_p, df: wrapper.ggml_cgraph_p, node: ASTNode) -> Optional[Tensor | int | float]:
     """Performs "instruction lowering" on the AST, producing a ggml graph. This is the final step in compiling a GGML model."""
 
-    # logging.debug(f"Building ggml graph for {node}")
+    # logger.debug(f"Building ggml graph for {node}")
     if isinstance(node, Expression):
         match node.operation:
             case Operation.VALUE:

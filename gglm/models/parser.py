@@ -12,6 +12,8 @@ from gglm.models import ContextParams, ModelParams
 from gglm.models.ast import ASTNode, Expression, Assignment, RepeatBlock, FunctionCall, Operand, Operation
 from gglm.wrapper import gen
 
+logger = logging.getLogger(__name__)
+
 PARSER_DEFINITION = """
 
 model: "model" ID "{" tensors graph "}"
@@ -233,7 +235,7 @@ class GGMLParser:
                     new_tensor = ParsedTensor(name=name.value, type=self.parse_type(type), shape=self.parse_shape(shape), is_input=attr.value == 'is_input')
                     return new_tensor
             
-        logging.debug(f"{tensor=}")
+        logger.debug(f"{tensor=}")
         raise ParseError(f"Failed to parse tensor", tensor.children[0])
     
     def parse_statement(self, statement: Tree):
@@ -250,7 +252,7 @@ class GGMLParser:
                     args = [self.parse_expression(arg) for arg in args]
                     return FunctionCall(source_token=name, function_name=name.value, arguments=args)
             case _:
-                logging.debug(f"unmatched statement: {statement}")
+                logger.debug(f"unmatched statement: {statement}")
         raise ParseError(f"Failed to parse graph statement", statement.children[0])
 
     def parse(self, file: str, context_params: ContextParams, model_params: ModelParams):
@@ -274,7 +276,7 @@ class GGMLParser:
         model_tree = self.collapse_expr_tree(parsed_content)
         model_name = model_tree.children[0].value
         
-        logging.debug(f"Parsing model {model_name}")
+        logger.debug(f"Parsing model {model_name}")
 
         parse_ctx = ParseContext(model=model_name, source=text, context_params=context_params, model_params=model_params)
         
@@ -284,7 +286,7 @@ class GGMLParser:
             for tensor in tensors_subtree.children:
                 parsed_tensor = self.parse_tensor(tensor)
                 parse_ctx.created_tensors.append(parsed_tensor)
-                logging.debug(f"Defined tensor: {parsed_tensor}")
+                logger.debug(f"Defined tensor: {parsed_tensor}")
 
         # parse graph block
         graph_subtree = model_tree.children[2]
@@ -317,6 +319,6 @@ class GGMLParser:
                     )
                     parse_ctx.created_tensors.append(new_tensor)
         
-        logging.debug(f"Finished parsing model {model_name}")
+        logger.debug(f"Finished parsing model {model_name}")
         
         return parse_ctx
