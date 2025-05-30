@@ -26,8 +26,9 @@ _libraries = {}
 
 def ctypes_function_for_shared_library(libname: str):
     def ctypes_function(
-        name: str, argtypes: List[Any], restype: Any, enabled: bool = True
+        name: str, argtypes: List[Any], restype: Any
     ):
+        enabled = libname in _libraries and hasattr(_libraries[libname], name)
         def decorator(f: F) -> F:
             if enabled:
                 func = getattr(_libraries[libname], name)
@@ -38,14 +39,13 @@ def ctypes_function_for_shared_library(libname: str):
             else:
                 def f_(*args: Any, **kwargs: Any):
                     raise RuntimeError(
-                        f"Function '{name}' is not available in the shared library '{libname}' (enabled=False)"
+                        f"Function '{name}' is not available in the shared library '{libname}'."
                     )
                 return cast(F, f_)
 
         return decorator
 
     return ctypes_function
-
 _libraries['libggml-base.so'] = ctypes.CDLL("%slibggml-base.so" % GGML_LIBRARY_DIR)
 def string_cast(char_pointer, encoding='utf-8', errors='strict'):
     value = ctypes.cast(char_pointer, ctypes.c_char_p).value
@@ -176,9 +176,10 @@ class Union(ctypes.Union, AsDictMixin):
 
 _libraries['libggml.so'] = ctypes.CDLL("%slibggml.so" % GGML_LIBRARY_DIR)
 _libraries['libggml-cpu.so'] = ctypes.CDLL("%slibggml-cpu.so" % GGML_LIBRARY_DIR)
+_libraries['libggml-cuda.so'] = ctypes.CDLL("%slibggml-cuda.so" % GGML_LIBRARY_DIR)
 
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_abort", [ctypes.POINTER(ctypes.c_char), ctypes.c_int32, ctypes.POINTER(ctypes.c_char)], None, enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_abort", [ctypes.POINTER(ctypes.c_char), ctypes.c_int32, ctypes.POINTER(ctypes.c_char)], None)
 def ggml_abort(file: ctypes._Pointer[ctypes.c_char], line: ctypes.c_int32, fmt: ctypes._Pointer[ctypes.c_char]) -> None:
     ...
 
@@ -195,25 +196,25 @@ GGML_STATUS_FAILED = -1
 GGML_STATUS_SUCCESS = 0
 GGML_STATUS_ABORTED = 1
 ggml_status = ctypes.c_int32 # enum
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_status_to_string", [ggml_status], ctypes.POINTER(ctypes.c_char), enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_status_to_string", [ggml_status], ctypes.POINTER(ctypes.c_char))
 def ggml_status_to_string(status: ggml_status) -> ctypes._Pointer[ctypes.c_char]:
     ...
 
 ggml_fp16_t = ctypes.c_uint16
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_fp16_to_fp32", [ggml_fp16_t], ctypes.c_float, enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_fp16_to_fp32", [ggml_fp16_t], ctypes.c_float)
 def ggml_fp16_to_fp32(p1: ggml_fp16_t) -> ctypes.c_float:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_fp32_to_fp16", [ctypes.c_float], ggml_fp16_t, enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_fp32_to_fp16", [ctypes.c_float], ggml_fp16_t)
 def ggml_fp32_to_fp16(p1: ctypes.c_float) -> ggml_fp16_t:
     ...
 
 int64_t = ctypes.c_int64
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_fp16_to_fp32_row", [ctypes.POINTER(ctypes.c_uint16), ctypes.POINTER(ctypes.c_float), int64_t], None, enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_fp16_to_fp32_row", [ctypes.POINTER(ctypes.c_uint16), ctypes.POINTER(ctypes.c_float), int64_t], None)
 def ggml_fp16_to_fp32_row(p1: ctypes._Pointer[ctypes.c_uint16], p2: ctypes._Pointer[ctypes.c_float], p3: int64_t) -> None:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_fp32_to_fp16_row", [ctypes.POINTER(ctypes.c_float), ctypes.POINTER(ctypes.c_uint16), int64_t], None, enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_fp32_to_fp16_row", [ctypes.POINTER(ctypes.c_float), ctypes.POINTER(ctypes.c_uint16), int64_t], None)
 def ggml_fp32_to_fp16_row(p1: ctypes._Pointer[ctypes.c_float], p2: ctypes._Pointer[ctypes.c_uint16], p3: int64_t) -> None:
     ...
 
@@ -226,23 +227,23 @@ struct_c__SA_ggml_bf16_t._fields_ = [
 ]
 
 ggml_bf16_t = struct_c__SA_ggml_bf16_t
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_fp32_to_bf16", [ctypes.c_float], ggml_bf16_t, enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_fp32_to_bf16", [ctypes.c_float], ggml_bf16_t)
 def ggml_fp32_to_bf16(p1: ctypes.c_float) -> ggml_bf16_t:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_bf16_to_fp32", [ggml_bf16_t], ctypes.c_float, enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_bf16_to_fp32", [ggml_bf16_t], ctypes.c_float)
 def ggml_bf16_to_fp32(p1: ggml_bf16_t) -> ctypes.c_float:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_bf16_to_fp32_row", [ctypes.POINTER(struct_c__SA_ggml_bf16_t), ctypes.POINTER(ctypes.c_float), int64_t], None, enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_bf16_to_fp32_row", [ctypes.POINTER(struct_c__SA_ggml_bf16_t), ctypes.POINTER(ctypes.c_float), int64_t], None)
 def ggml_bf16_to_fp32_row(p1: ctypes._Pointer[struct_c__SA_ggml_bf16_t], p2: ctypes._Pointer[ctypes.c_float], p3: int64_t) -> None:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_fp32_to_bf16_row_ref", [ctypes.POINTER(ctypes.c_float), ctypes.POINTER(struct_c__SA_ggml_bf16_t), int64_t], None, enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_fp32_to_bf16_row_ref", [ctypes.POINTER(ctypes.c_float), ctypes.POINTER(struct_c__SA_ggml_bf16_t), int64_t], None)
 def ggml_fp32_to_bf16_row_ref(p1: ctypes._Pointer[ctypes.c_float], p2: ctypes._Pointer[struct_c__SA_ggml_bf16_t], p3: int64_t) -> None:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_fp32_to_bf16_row", [ctypes.POINTER(ctypes.c_float), ctypes.POINTER(struct_c__SA_ggml_bf16_t), int64_t], None, enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_fp32_to_bf16_row", [ctypes.POINTER(ctypes.c_float), ctypes.POINTER(struct_c__SA_ggml_bf16_t), int64_t], None)
 def ggml_fp32_to_bf16_row(p1: ctypes._Pointer[ctypes.c_float], p2: ctypes._Pointer[struct_c__SA_ggml_bf16_t], p3: int64_t) -> None:
     ...
 
@@ -733,27 +734,27 @@ struct_ggml_backend_buffer._fields_ = [
 ggml_abort_callback = ctypes.CFUNCTYPE(ctypes.c_bool, ctypes.POINTER(None))
 ggml_guid = ctypes.c_ubyte * 16
 ggml_guid_t = ctypes.POINTER(ctypes.c_ubyte * 16)
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_guid_matches", [ggml_guid_t, ggml_guid_t], ctypes.c_bool, enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_guid_matches", [ggml_guid_t, ggml_guid_t], ctypes.c_bool)
 def ggml_guid_matches(guid_a: ggml_guid_t, guid_b: ggml_guid_t) -> ctypes.c_bool:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_time_init", [], None, enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_time_init", [], None)
 def ggml_time_init() -> None:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_time_ms", [], int64_t, enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_time_ms", [], int64_t)
 def ggml_time_ms() -> int64_t:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_time_us", [], int64_t, enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_time_us", [], int64_t)
 def ggml_time_us() -> int64_t:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_cycles", [], int64_t, enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_cycles", [], int64_t)
 def ggml_cycles() -> int64_t:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_cycles_per_ms", [], int64_t, enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_cycles_per_ms", [], int64_t)
 def ggml_cycles_per_ms() -> int64_t:
     ...
 
@@ -832,7 +833,7 @@ struct__IO_FILE._fields_ = [
     ('_unused2', ctypes.c_char * 20),
 ]
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_fopen", [ctypes.POINTER(ctypes.c_char), ctypes.POINTER(ctypes.c_char)], ctypes.POINTER(struct__IO_FILE), enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_fopen", [ctypes.POINTER(ctypes.c_char), ctypes.POINTER(ctypes.c_char)], ctypes.POINTER(struct__IO_FILE))
 def ggml_fopen(fname: ctypes._Pointer[ctypes.c_char], mode: ctypes._Pointer[ctypes.c_char]) -> ctypes._Pointer[struct__IO_FILE]:
     ...
 
@@ -843,7 +844,7 @@ class struct_ggml_object(Structure):
         next: ctypes._Pointer[struct_ggml_object]
         type: ggml_object_type
         padding: ctypes.Array[ctypes.c_char]
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_print_object", [ctypes.POINTER(struct_ggml_object)], None, enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_print_object", [ctypes.POINTER(struct_ggml_object)], None)
 def ggml_print_object(obj: ctypes._Pointer[struct_ggml_object]) -> None:
     ...
 
@@ -856,828 +857,828 @@ class struct_ggml_context(Structure):
         n_objects: ctypes.c_int32
         objects_begin: ctypes._Pointer[struct_ggml_object]
         objects_end: ctypes._Pointer[struct_ggml_object]
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_print_objects", [ctypes.POINTER(struct_ggml_context)], None, enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_print_objects", [ctypes.POINTER(struct_ggml_context)], None)
 def ggml_print_objects(ctx: ctypes._Pointer[struct_ggml_context]) -> None:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_nelements", [ctypes.POINTER(struct_ggml_tensor)], int64_t, enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_nelements", [ctypes.POINTER(struct_ggml_tensor)], int64_t)
 def ggml_nelements(tensor: ctypes._Pointer[struct_ggml_tensor]) -> int64_t:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_nrows", [ctypes.POINTER(struct_ggml_tensor)], int64_t, enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_nrows", [ctypes.POINTER(struct_ggml_tensor)], int64_t)
 def ggml_nrows(tensor: ctypes._Pointer[struct_ggml_tensor]) -> int64_t:
     ...
 
 size_t = ctypes.c_uint64
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_nbytes", [ctypes.POINTER(struct_ggml_tensor)], size_t, enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_nbytes", [ctypes.POINTER(struct_ggml_tensor)], size_t)
 def ggml_nbytes(tensor: ctypes._Pointer[struct_ggml_tensor]) -> size_t:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_nbytes_pad", [ctypes.POINTER(struct_ggml_tensor)], size_t, enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_nbytes_pad", [ctypes.POINTER(struct_ggml_tensor)], size_t)
 def ggml_nbytes_pad(tensor: ctypes._Pointer[struct_ggml_tensor]) -> size_t:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_blck_size", [ggml_type], int64_t, enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_blck_size", [ggml_type], int64_t)
 def ggml_blck_size(type: ggml_type) -> int64_t:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_type_size", [ggml_type], size_t, enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_type_size", [ggml_type], size_t)
 def ggml_type_size(type: ggml_type) -> size_t:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_row_size", [ggml_type, int64_t], size_t, enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_row_size", [ggml_type, int64_t], size_t)
 def ggml_row_size(type: ggml_type, ne: int64_t) -> size_t:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_type_sizef", [ggml_type], ctypes.c_double, enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_type_sizef", [ggml_type], ctypes.c_double)
 def ggml_type_sizef(type: ggml_type) -> ctypes.c_double:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_type_name", [ggml_type], ctypes.POINTER(ctypes.c_char), enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_type_name", [ggml_type], ctypes.POINTER(ctypes.c_char))
 def ggml_type_name(type: ggml_type) -> ctypes._Pointer[ctypes.c_char]:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_op_name", [ggml_op], ctypes.POINTER(ctypes.c_char), enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_op_name", [ggml_op], ctypes.POINTER(ctypes.c_char))
 def ggml_op_name(op: ggml_op) -> ctypes._Pointer[ctypes.c_char]:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_op_symbol", [ggml_op], ctypes.POINTER(ctypes.c_char), enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_op_symbol", [ggml_op], ctypes.POINTER(ctypes.c_char))
 def ggml_op_symbol(op: ggml_op) -> ctypes._Pointer[ctypes.c_char]:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_unary_op_name", [ggml_unary_op], ctypes.POINTER(ctypes.c_char), enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_unary_op_name", [ggml_unary_op], ctypes.POINTER(ctypes.c_char))
 def ggml_unary_op_name(op: ggml_unary_op) -> ctypes._Pointer[ctypes.c_char]:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_op_desc", [ctypes.POINTER(struct_ggml_tensor)], ctypes.POINTER(ctypes.c_char), enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_op_desc", [ctypes.POINTER(struct_ggml_tensor)], ctypes.POINTER(ctypes.c_char))
 def ggml_op_desc(t: ctypes._Pointer[struct_ggml_tensor]) -> ctypes._Pointer[ctypes.c_char]:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_element_size", [ctypes.POINTER(struct_ggml_tensor)], size_t, enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_element_size", [ctypes.POINTER(struct_ggml_tensor)], size_t)
 def ggml_element_size(tensor: ctypes._Pointer[struct_ggml_tensor]) -> size_t:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_is_quantized", [ggml_type], ctypes.c_bool, enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_is_quantized", [ggml_type], ctypes.c_bool)
 def ggml_is_quantized(type: ggml_type) -> ctypes.c_bool:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_ftype_to_ggml_type", [ggml_ftype], ggml_type, enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_ftype_to_ggml_type", [ggml_ftype], ggml_type)
 def ggml_ftype_to_ggml_type(ftype: ggml_ftype) -> ggml_type:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_is_transposed", [ctypes.POINTER(struct_ggml_tensor)], ctypes.c_bool, enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_is_transposed", [ctypes.POINTER(struct_ggml_tensor)], ctypes.c_bool)
 def ggml_is_transposed(tensor: ctypes._Pointer[struct_ggml_tensor]) -> ctypes.c_bool:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_is_permuted", [ctypes.POINTER(struct_ggml_tensor)], ctypes.c_bool, enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_is_permuted", [ctypes.POINTER(struct_ggml_tensor)], ctypes.c_bool)
 def ggml_is_permuted(tensor: ctypes._Pointer[struct_ggml_tensor]) -> ctypes.c_bool:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_is_empty", [ctypes.POINTER(struct_ggml_tensor)], ctypes.c_bool, enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_is_empty", [ctypes.POINTER(struct_ggml_tensor)], ctypes.c_bool)
 def ggml_is_empty(tensor: ctypes._Pointer[struct_ggml_tensor]) -> ctypes.c_bool:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_is_scalar", [ctypes.POINTER(struct_ggml_tensor)], ctypes.c_bool, enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_is_scalar", [ctypes.POINTER(struct_ggml_tensor)], ctypes.c_bool)
 def ggml_is_scalar(tensor: ctypes._Pointer[struct_ggml_tensor]) -> ctypes.c_bool:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_is_vector", [ctypes.POINTER(struct_ggml_tensor)], ctypes.c_bool, enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_is_vector", [ctypes.POINTER(struct_ggml_tensor)], ctypes.c_bool)
 def ggml_is_vector(tensor: ctypes._Pointer[struct_ggml_tensor]) -> ctypes.c_bool:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_is_matrix", [ctypes.POINTER(struct_ggml_tensor)], ctypes.c_bool, enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_is_matrix", [ctypes.POINTER(struct_ggml_tensor)], ctypes.c_bool)
 def ggml_is_matrix(tensor: ctypes._Pointer[struct_ggml_tensor]) -> ctypes.c_bool:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_is_3d", [ctypes.POINTER(struct_ggml_tensor)], ctypes.c_bool, enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_is_3d", [ctypes.POINTER(struct_ggml_tensor)], ctypes.c_bool)
 def ggml_is_3d(tensor: ctypes._Pointer[struct_ggml_tensor]) -> ctypes.c_bool:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_n_dims", [ctypes.POINTER(struct_ggml_tensor)], ctypes.c_int32, enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_n_dims", [ctypes.POINTER(struct_ggml_tensor)], ctypes.c_int32)
 def ggml_n_dims(tensor: ctypes._Pointer[struct_ggml_tensor]) -> ctypes.c_int32:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_is_contiguous", [ctypes.POINTER(struct_ggml_tensor)], ctypes.c_bool, enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_is_contiguous", [ctypes.POINTER(struct_ggml_tensor)], ctypes.c_bool)
 def ggml_is_contiguous(tensor: ctypes._Pointer[struct_ggml_tensor]) -> ctypes.c_bool:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_is_contiguous_0", [ctypes.POINTER(struct_ggml_tensor)], ctypes.c_bool, enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_is_contiguous_0", [ctypes.POINTER(struct_ggml_tensor)], ctypes.c_bool)
 def ggml_is_contiguous_0(tensor: ctypes._Pointer[struct_ggml_tensor]) -> ctypes.c_bool:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_is_contiguous_1", [ctypes.POINTER(struct_ggml_tensor)], ctypes.c_bool, enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_is_contiguous_1", [ctypes.POINTER(struct_ggml_tensor)], ctypes.c_bool)
 def ggml_is_contiguous_1(tensor: ctypes._Pointer[struct_ggml_tensor]) -> ctypes.c_bool:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_is_contiguous_2", [ctypes.POINTER(struct_ggml_tensor)], ctypes.c_bool, enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_is_contiguous_2", [ctypes.POINTER(struct_ggml_tensor)], ctypes.c_bool)
 def ggml_is_contiguous_2(tensor: ctypes._Pointer[struct_ggml_tensor]) -> ctypes.c_bool:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_is_contiguously_allocated", [ctypes.POINTER(struct_ggml_tensor)], ctypes.c_bool, enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_is_contiguously_allocated", [ctypes.POINTER(struct_ggml_tensor)], ctypes.c_bool)
 def ggml_is_contiguously_allocated(tensor: ctypes._Pointer[struct_ggml_tensor]) -> ctypes.c_bool:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_is_contiguous_channels", [ctypes.POINTER(struct_ggml_tensor)], ctypes.c_bool, enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_is_contiguous_channels", [ctypes.POINTER(struct_ggml_tensor)], ctypes.c_bool)
 def ggml_is_contiguous_channels(tensor: ctypes._Pointer[struct_ggml_tensor]) -> ctypes.c_bool:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_are_same_shape", [ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor)], ctypes.c_bool, enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_are_same_shape", [ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor)], ctypes.c_bool)
 def ggml_are_same_shape(t0: ctypes._Pointer[struct_ggml_tensor], t1: ctypes._Pointer[struct_ggml_tensor]) -> ctypes.c_bool:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_are_same_stride", [ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor)], ctypes.c_bool, enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_are_same_stride", [ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor)], ctypes.c_bool)
 def ggml_are_same_stride(t0: ctypes._Pointer[struct_ggml_tensor], t1: ctypes._Pointer[struct_ggml_tensor]) -> ctypes.c_bool:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_can_repeat", [ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor)], ctypes.c_bool, enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_can_repeat", [ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor)], ctypes.c_bool)
 def ggml_can_repeat(t0: ctypes._Pointer[struct_ggml_tensor], t1: ctypes._Pointer[struct_ggml_tensor]) -> ctypes.c_bool:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_tensor_overhead", [], size_t, enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_tensor_overhead", [], size_t)
 def ggml_tensor_overhead() -> size_t:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_validate_row_data", [ggml_type, ctypes.POINTER(None), size_t], ctypes.c_bool, enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_validate_row_data", [ggml_type, ctypes.POINTER(None), size_t], ctypes.c_bool)
 def ggml_validate_row_data(type: ggml_type, data: ctypes.c_void_p, nbytes: size_t) -> ctypes.c_bool:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_init", [struct_ggml_init_params], ctypes.POINTER(struct_ggml_context), enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_init", [struct_ggml_init_params], ctypes.POINTER(struct_ggml_context))
 def ggml_init(params: struct_ggml_init_params) -> ctypes._Pointer[struct_ggml_context]:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_reset", [ctypes.POINTER(struct_ggml_context)], None, enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_reset", [ctypes.POINTER(struct_ggml_context)], None)
 def ggml_reset(ctx: ctypes._Pointer[struct_ggml_context]) -> None:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_free", [ctypes.POINTER(struct_ggml_context)], None, enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_free", [ctypes.POINTER(struct_ggml_context)], None)
 def ggml_free(ctx: ctypes._Pointer[struct_ggml_context]) -> None:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_used_mem", [ctypes.POINTER(struct_ggml_context)], size_t, enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_used_mem", [ctypes.POINTER(struct_ggml_context)], size_t)
 def ggml_used_mem(ctx: ctypes._Pointer[struct_ggml_context]) -> size_t:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_get_no_alloc", [ctypes.POINTER(struct_ggml_context)], ctypes.c_bool, enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_get_no_alloc", [ctypes.POINTER(struct_ggml_context)], ctypes.c_bool)
 def ggml_get_no_alloc(ctx: ctypes._Pointer[struct_ggml_context]) -> ctypes.c_bool:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_set_no_alloc", [ctypes.POINTER(struct_ggml_context), ctypes.c_bool], None, enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_set_no_alloc", [ctypes.POINTER(struct_ggml_context), ctypes.c_bool], None)
 def ggml_set_no_alloc(ctx: ctypes._Pointer[struct_ggml_context], no_alloc: ctypes.c_bool) -> None:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_get_mem_buffer", [ctypes.POINTER(struct_ggml_context)], ctypes.POINTER(None), enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_get_mem_buffer", [ctypes.POINTER(struct_ggml_context)], ctypes.POINTER(None))
 def ggml_get_mem_buffer(ctx: ctypes._Pointer[struct_ggml_context]) -> ctypes.c_void_p:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_get_mem_size", [ctypes.POINTER(struct_ggml_context)], size_t, enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_get_mem_size", [ctypes.POINTER(struct_ggml_context)], size_t)
 def ggml_get_mem_size(ctx: ctypes._Pointer[struct_ggml_context]) -> size_t:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_get_max_tensor_size", [ctypes.POINTER(struct_ggml_context)], size_t, enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_get_max_tensor_size", [ctypes.POINTER(struct_ggml_context)], size_t)
 def ggml_get_max_tensor_size(ctx: ctypes._Pointer[struct_ggml_context]) -> size_t:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_new_tensor", [ctypes.POINTER(struct_ggml_context), ggml_type, ctypes.c_int32, ctypes.POINTER(ctypes.c_int64)], ctypes.POINTER(struct_ggml_tensor), enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_new_tensor", [ctypes.POINTER(struct_ggml_context), ggml_type, ctypes.c_int32, ctypes.POINTER(ctypes.c_int64)], ctypes.POINTER(struct_ggml_tensor))
 def ggml_new_tensor(ctx: ctypes._Pointer[struct_ggml_context], type: ggml_type, n_dims: ctypes.c_int32, ne: ctypes._Pointer[ctypes.c_int64]) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_new_tensor_1d", [ctypes.POINTER(struct_ggml_context), ggml_type, int64_t], ctypes.POINTER(struct_ggml_tensor), enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_new_tensor_1d", [ctypes.POINTER(struct_ggml_context), ggml_type, int64_t], ctypes.POINTER(struct_ggml_tensor))
 def ggml_new_tensor_1d(ctx: ctypes._Pointer[struct_ggml_context], type: ggml_type, ne0: int64_t) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_new_tensor_2d", [ctypes.POINTER(struct_ggml_context), ggml_type, int64_t, int64_t], ctypes.POINTER(struct_ggml_tensor), enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_new_tensor_2d", [ctypes.POINTER(struct_ggml_context), ggml_type, int64_t, int64_t], ctypes.POINTER(struct_ggml_tensor))
 def ggml_new_tensor_2d(ctx: ctypes._Pointer[struct_ggml_context], type: ggml_type, ne0: int64_t, ne1: int64_t) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_new_tensor_3d", [ctypes.POINTER(struct_ggml_context), ggml_type, int64_t, int64_t, int64_t], ctypes.POINTER(struct_ggml_tensor), enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_new_tensor_3d", [ctypes.POINTER(struct_ggml_context), ggml_type, int64_t, int64_t, int64_t], ctypes.POINTER(struct_ggml_tensor))
 def ggml_new_tensor_3d(ctx: ctypes._Pointer[struct_ggml_context], type: ggml_type, ne0: int64_t, ne1: int64_t, ne2: int64_t) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_new_tensor_4d", [ctypes.POINTER(struct_ggml_context), ggml_type, int64_t, int64_t, int64_t, int64_t], ctypes.POINTER(struct_ggml_tensor), enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_new_tensor_4d", [ctypes.POINTER(struct_ggml_context), ggml_type, int64_t, int64_t, int64_t, int64_t], ctypes.POINTER(struct_ggml_tensor))
 def ggml_new_tensor_4d(ctx: ctypes._Pointer[struct_ggml_context], type: ggml_type, ne0: int64_t, ne1: int64_t, ne2: int64_t, ne3: int64_t) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_new_buffer", [ctypes.POINTER(struct_ggml_context), size_t], ctypes.POINTER(None), enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_new_buffer", [ctypes.POINTER(struct_ggml_context), size_t], ctypes.POINTER(None))
 def ggml_new_buffer(ctx: ctypes._Pointer[struct_ggml_context], nbytes: size_t) -> ctypes.c_void_p:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_dup_tensor", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor)], ctypes.POINTER(struct_ggml_tensor), enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_dup_tensor", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor)], ctypes.POINTER(struct_ggml_tensor))
 def ggml_dup_tensor(ctx: ctypes._Pointer[struct_ggml_context], src: ctypes._Pointer[struct_ggml_tensor]) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_view_tensor", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor)], ctypes.POINTER(struct_ggml_tensor), enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_view_tensor", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor)], ctypes.POINTER(struct_ggml_tensor))
 def ggml_view_tensor(ctx: ctypes._Pointer[struct_ggml_context], src: ctypes._Pointer[struct_ggml_tensor]) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_get_first_tensor", [ctypes.POINTER(struct_ggml_context)], ctypes.POINTER(struct_ggml_tensor), enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_get_first_tensor", [ctypes.POINTER(struct_ggml_context)], ctypes.POINTER(struct_ggml_tensor))
 def ggml_get_first_tensor(ctx: ctypes._Pointer[struct_ggml_context]) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_get_next_tensor", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor)], ctypes.POINTER(struct_ggml_tensor), enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_get_next_tensor", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor)], ctypes.POINTER(struct_ggml_tensor))
 def ggml_get_next_tensor(ctx: ctypes._Pointer[struct_ggml_context], tensor: ctypes._Pointer[struct_ggml_tensor]) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_get_tensor", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(ctypes.c_char)], ctypes.POINTER(struct_ggml_tensor), enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_get_tensor", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(ctypes.c_char)], ctypes.POINTER(struct_ggml_tensor))
 def ggml_get_tensor(ctx: ctypes._Pointer[struct_ggml_context], name: ctypes._Pointer[ctypes.c_char]) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_unravel_index", [ctypes.POINTER(struct_ggml_tensor), int64_t, ctypes.POINTER(ctypes.c_int64), ctypes.POINTER(ctypes.c_int64), ctypes.POINTER(ctypes.c_int64), ctypes.POINTER(ctypes.c_int64)], None, enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_unravel_index", [ctypes.POINTER(struct_ggml_tensor), int64_t, ctypes.POINTER(ctypes.c_int64), ctypes.POINTER(ctypes.c_int64), ctypes.POINTER(ctypes.c_int64), ctypes.POINTER(ctypes.c_int64)], None)
 def ggml_unravel_index(tensor: ctypes._Pointer[struct_ggml_tensor], i: int64_t, i0: ctypes._Pointer[ctypes.c_int64], i1: ctypes._Pointer[ctypes.c_int64], i2: ctypes._Pointer[ctypes.c_int64], i3: ctypes._Pointer[ctypes.c_int64]) -> None:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_get_unary_op", [ctypes.POINTER(struct_ggml_tensor)], ggml_unary_op, enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_get_unary_op", [ctypes.POINTER(struct_ggml_tensor)], ggml_unary_op)
 def ggml_get_unary_op(tensor: ctypes._Pointer[struct_ggml_tensor]) -> ggml_unary_op:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_get_data", [ctypes.POINTER(struct_ggml_tensor)], ctypes.POINTER(None), enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_get_data", [ctypes.POINTER(struct_ggml_tensor)], ctypes.POINTER(None))
 def ggml_get_data(tensor: ctypes._Pointer[struct_ggml_tensor]) -> ctypes.c_void_p:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_get_data_f32", [ctypes.POINTER(struct_ggml_tensor)], ctypes.POINTER(ctypes.c_float), enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_get_data_f32", [ctypes.POINTER(struct_ggml_tensor)], ctypes.POINTER(ctypes.c_float))
 def ggml_get_data_f32(tensor: ctypes._Pointer[struct_ggml_tensor]) -> ctypes._Pointer[ctypes.c_float]:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_get_name", [ctypes.POINTER(struct_ggml_tensor)], ctypes.POINTER(ctypes.c_char), enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_get_name", [ctypes.POINTER(struct_ggml_tensor)], ctypes.POINTER(ctypes.c_char))
 def ggml_get_name(tensor: ctypes._Pointer[struct_ggml_tensor]) -> ctypes._Pointer[ctypes.c_char]:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_set_name", [ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(ctypes.c_char)], ctypes.POINTER(struct_ggml_tensor), enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_set_name", [ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(ctypes.c_char)], ctypes.POINTER(struct_ggml_tensor))
 def ggml_set_name(tensor: ctypes._Pointer[struct_ggml_tensor], name: ctypes._Pointer[ctypes.c_char]) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_format_name", [ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(ctypes.c_char)], ctypes.POINTER(struct_ggml_tensor), enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_format_name", [ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(ctypes.c_char)], ctypes.POINTER(struct_ggml_tensor))
 def ggml_format_name(tensor: ctypes._Pointer[struct_ggml_tensor], fmt: ctypes._Pointer[ctypes.c_char]) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_set_input", [ctypes.POINTER(struct_ggml_tensor)], None, enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_set_input", [ctypes.POINTER(struct_ggml_tensor)], None)
 def ggml_set_input(tensor: ctypes._Pointer[struct_ggml_tensor]) -> None:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_set_output", [ctypes.POINTER(struct_ggml_tensor)], None, enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_set_output", [ctypes.POINTER(struct_ggml_tensor)], None)
 def ggml_set_output(tensor: ctypes._Pointer[struct_ggml_tensor]) -> None:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_set_param", [ctypes.POINTER(struct_ggml_tensor)], None, enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_set_param", [ctypes.POINTER(struct_ggml_tensor)], None)
 def ggml_set_param(tensor: ctypes._Pointer[struct_ggml_tensor]) -> None:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_set_loss", [ctypes.POINTER(struct_ggml_tensor)], None, enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_set_loss", [ctypes.POINTER(struct_ggml_tensor)], None)
 def ggml_set_loss(tensor: ctypes._Pointer[struct_ggml_tensor]) -> None:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_dup", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor)], ctypes.POINTER(struct_ggml_tensor), enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_dup", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor)], ctypes.POINTER(struct_ggml_tensor))
 def ggml_dup(ctx: ctypes._Pointer[struct_ggml_context], a: ctypes._Pointer[struct_ggml_tensor]) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_dup_inplace", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor)], ctypes.POINTER(struct_ggml_tensor), enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_dup_inplace", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor)], ctypes.POINTER(struct_ggml_tensor))
 def ggml_dup_inplace(ctx: ctypes._Pointer[struct_ggml_context], a: ctypes._Pointer[struct_ggml_tensor]) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_add", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor)], ctypes.POINTER(struct_ggml_tensor), enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_add", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor)], ctypes.POINTER(struct_ggml_tensor))
 def ggml_add(ctx: ctypes._Pointer[struct_ggml_context], a: ctypes._Pointer[struct_ggml_tensor], b: ctypes._Pointer[struct_ggml_tensor]) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_add_inplace", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor)], ctypes.POINTER(struct_ggml_tensor), enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_add_inplace", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor)], ctypes.POINTER(struct_ggml_tensor))
 def ggml_add_inplace(ctx: ctypes._Pointer[struct_ggml_context], a: ctypes._Pointer[struct_ggml_tensor], b: ctypes._Pointer[struct_ggml_tensor]) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_add_cast", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor), ggml_type], ctypes.POINTER(struct_ggml_tensor), enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_add_cast", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor), ggml_type], ctypes.POINTER(struct_ggml_tensor))
 def ggml_add_cast(ctx: ctypes._Pointer[struct_ggml_context], a: ctypes._Pointer[struct_ggml_tensor], b: ctypes._Pointer[struct_ggml_tensor], type: ggml_type) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_add1", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor)], ctypes.POINTER(struct_ggml_tensor), enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_add1", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor)], ctypes.POINTER(struct_ggml_tensor))
 def ggml_add1(ctx: ctypes._Pointer[struct_ggml_context], a: ctypes._Pointer[struct_ggml_tensor], b: ctypes._Pointer[struct_ggml_tensor]) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_add1_inplace", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor)], ctypes.POINTER(struct_ggml_tensor), enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_add1_inplace", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor)], ctypes.POINTER(struct_ggml_tensor))
 def ggml_add1_inplace(ctx: ctypes._Pointer[struct_ggml_context], a: ctypes._Pointer[struct_ggml_tensor], b: ctypes._Pointer[struct_ggml_tensor]) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_acc", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor), size_t, size_t, size_t, size_t], ctypes.POINTER(struct_ggml_tensor), enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_acc", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor), size_t, size_t, size_t, size_t], ctypes.POINTER(struct_ggml_tensor))
 def ggml_acc(ctx: ctypes._Pointer[struct_ggml_context], a: ctypes._Pointer[struct_ggml_tensor], b: ctypes._Pointer[struct_ggml_tensor], nb1: size_t, nb2: size_t, nb3: size_t, offset: size_t) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_acc_inplace", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor), size_t, size_t, size_t, size_t], ctypes.POINTER(struct_ggml_tensor), enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_acc_inplace", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor), size_t, size_t, size_t, size_t], ctypes.POINTER(struct_ggml_tensor))
 def ggml_acc_inplace(ctx: ctypes._Pointer[struct_ggml_context], a: ctypes._Pointer[struct_ggml_tensor], b: ctypes._Pointer[struct_ggml_tensor], nb1: size_t, nb2: size_t, nb3: size_t, offset: size_t) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_sub", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor)], ctypes.POINTER(struct_ggml_tensor), enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_sub", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor)], ctypes.POINTER(struct_ggml_tensor))
 def ggml_sub(ctx: ctypes._Pointer[struct_ggml_context], a: ctypes._Pointer[struct_ggml_tensor], b: ctypes._Pointer[struct_ggml_tensor]) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_sub_inplace", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor)], ctypes.POINTER(struct_ggml_tensor), enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_sub_inplace", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor)], ctypes.POINTER(struct_ggml_tensor))
 def ggml_sub_inplace(ctx: ctypes._Pointer[struct_ggml_context], a: ctypes._Pointer[struct_ggml_tensor], b: ctypes._Pointer[struct_ggml_tensor]) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_mul", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor)], ctypes.POINTER(struct_ggml_tensor), enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_mul", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor)], ctypes.POINTER(struct_ggml_tensor))
 def ggml_mul(ctx: ctypes._Pointer[struct_ggml_context], a: ctypes._Pointer[struct_ggml_tensor], b: ctypes._Pointer[struct_ggml_tensor]) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_mul_inplace", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor)], ctypes.POINTER(struct_ggml_tensor), enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_mul_inplace", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor)], ctypes.POINTER(struct_ggml_tensor))
 def ggml_mul_inplace(ctx: ctypes._Pointer[struct_ggml_context], a: ctypes._Pointer[struct_ggml_tensor], b: ctypes._Pointer[struct_ggml_tensor]) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_div", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor)], ctypes.POINTER(struct_ggml_tensor), enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_div", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor)], ctypes.POINTER(struct_ggml_tensor))
 def ggml_div(ctx: ctypes._Pointer[struct_ggml_context], a: ctypes._Pointer[struct_ggml_tensor], b: ctypes._Pointer[struct_ggml_tensor]) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_div_inplace", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor)], ctypes.POINTER(struct_ggml_tensor), enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_div_inplace", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor)], ctypes.POINTER(struct_ggml_tensor))
 def ggml_div_inplace(ctx: ctypes._Pointer[struct_ggml_context], a: ctypes._Pointer[struct_ggml_tensor], b: ctypes._Pointer[struct_ggml_tensor]) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_sqr", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor)], ctypes.POINTER(struct_ggml_tensor), enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_sqr", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor)], ctypes.POINTER(struct_ggml_tensor))
 def ggml_sqr(ctx: ctypes._Pointer[struct_ggml_context], a: ctypes._Pointer[struct_ggml_tensor]) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_sqr_inplace", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor)], ctypes.POINTER(struct_ggml_tensor), enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_sqr_inplace", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor)], ctypes.POINTER(struct_ggml_tensor))
 def ggml_sqr_inplace(ctx: ctypes._Pointer[struct_ggml_context], a: ctypes._Pointer[struct_ggml_tensor]) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_sqrt", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor)], ctypes.POINTER(struct_ggml_tensor), enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_sqrt", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor)], ctypes.POINTER(struct_ggml_tensor))
 def ggml_sqrt(ctx: ctypes._Pointer[struct_ggml_context], a: ctypes._Pointer[struct_ggml_tensor]) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_sqrt_inplace", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor)], ctypes.POINTER(struct_ggml_tensor), enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_sqrt_inplace", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor)], ctypes.POINTER(struct_ggml_tensor))
 def ggml_sqrt_inplace(ctx: ctypes._Pointer[struct_ggml_context], a: ctypes._Pointer[struct_ggml_tensor]) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_log", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor)], ctypes.POINTER(struct_ggml_tensor), enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_log", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor)], ctypes.POINTER(struct_ggml_tensor))
 def ggml_log(ctx: ctypes._Pointer[struct_ggml_context], a: ctypes._Pointer[struct_ggml_tensor]) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_log_inplace", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor)], ctypes.POINTER(struct_ggml_tensor), enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_log_inplace", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor)], ctypes.POINTER(struct_ggml_tensor))
 def ggml_log_inplace(ctx: ctypes._Pointer[struct_ggml_context], a: ctypes._Pointer[struct_ggml_tensor]) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_sin", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor)], ctypes.POINTER(struct_ggml_tensor), enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_sin", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor)], ctypes.POINTER(struct_ggml_tensor))
 def ggml_sin(ctx: ctypes._Pointer[struct_ggml_context], a: ctypes._Pointer[struct_ggml_tensor]) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_sin_inplace", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor)], ctypes.POINTER(struct_ggml_tensor), enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_sin_inplace", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor)], ctypes.POINTER(struct_ggml_tensor))
 def ggml_sin_inplace(ctx: ctypes._Pointer[struct_ggml_context], a: ctypes._Pointer[struct_ggml_tensor]) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_cos", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor)], ctypes.POINTER(struct_ggml_tensor), enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_cos", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor)], ctypes.POINTER(struct_ggml_tensor))
 def ggml_cos(ctx: ctypes._Pointer[struct_ggml_context], a: ctypes._Pointer[struct_ggml_tensor]) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_cos_inplace", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor)], ctypes.POINTER(struct_ggml_tensor), enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_cos_inplace", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor)], ctypes.POINTER(struct_ggml_tensor))
 def ggml_cos_inplace(ctx: ctypes._Pointer[struct_ggml_context], a: ctypes._Pointer[struct_ggml_tensor]) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_sum", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor)], ctypes.POINTER(struct_ggml_tensor), enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_sum", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor)], ctypes.POINTER(struct_ggml_tensor))
 def ggml_sum(ctx: ctypes._Pointer[struct_ggml_context], a: ctypes._Pointer[struct_ggml_tensor]) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_sum_rows", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor)], ctypes.POINTER(struct_ggml_tensor), enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_sum_rows", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor)], ctypes.POINTER(struct_ggml_tensor))
 def ggml_sum_rows(ctx: ctypes._Pointer[struct_ggml_context], a: ctypes._Pointer[struct_ggml_tensor]) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_mean", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor)], ctypes.POINTER(struct_ggml_tensor), enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_mean", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor)], ctypes.POINTER(struct_ggml_tensor))
 def ggml_mean(ctx: ctypes._Pointer[struct_ggml_context], a: ctypes._Pointer[struct_ggml_tensor]) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_argmax", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor)], ctypes.POINTER(struct_ggml_tensor), enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_argmax", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor)], ctypes.POINTER(struct_ggml_tensor))
 def ggml_argmax(ctx: ctypes._Pointer[struct_ggml_context], a: ctypes._Pointer[struct_ggml_tensor]) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_count_equal", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor)], ctypes.POINTER(struct_ggml_tensor), enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_count_equal", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor)], ctypes.POINTER(struct_ggml_tensor))
 def ggml_count_equal(ctx: ctypes._Pointer[struct_ggml_context], a: ctypes._Pointer[struct_ggml_tensor], b: ctypes._Pointer[struct_ggml_tensor]) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_repeat", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor)], ctypes.POINTER(struct_ggml_tensor), enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_repeat", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor)], ctypes.POINTER(struct_ggml_tensor))
 def ggml_repeat(ctx: ctypes._Pointer[struct_ggml_context], a: ctypes._Pointer[struct_ggml_tensor], b: ctypes._Pointer[struct_ggml_tensor]) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_repeat_4d", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), int64_t, int64_t, int64_t, int64_t], ctypes.POINTER(struct_ggml_tensor), enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_repeat_4d", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), int64_t, int64_t, int64_t, int64_t], ctypes.POINTER(struct_ggml_tensor))
 def ggml_repeat_4d(ctx: ctypes._Pointer[struct_ggml_context], a: ctypes._Pointer[struct_ggml_tensor], ne0: int64_t, ne1: int64_t, ne2: int64_t, ne3: int64_t) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_repeat_back", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor)], ctypes.POINTER(struct_ggml_tensor), enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_repeat_back", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor)], ctypes.POINTER(struct_ggml_tensor))
 def ggml_repeat_back(ctx: ctypes._Pointer[struct_ggml_context], a: ctypes._Pointer[struct_ggml_tensor], b: ctypes._Pointer[struct_ggml_tensor]) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_concat", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor), ctypes.c_int32], ctypes.POINTER(struct_ggml_tensor), enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_concat", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor), ctypes.c_int32], ctypes.POINTER(struct_ggml_tensor))
 def ggml_concat(ctx: ctypes._Pointer[struct_ggml_context], a: ctypes._Pointer[struct_ggml_tensor], b: ctypes._Pointer[struct_ggml_tensor], dim: ctypes.c_int32) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_abs", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor)], ctypes.POINTER(struct_ggml_tensor), enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_abs", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor)], ctypes.POINTER(struct_ggml_tensor))
 def ggml_abs(ctx: ctypes._Pointer[struct_ggml_context], a: ctypes._Pointer[struct_ggml_tensor]) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_abs_inplace", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor)], ctypes.POINTER(struct_ggml_tensor), enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_abs_inplace", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor)], ctypes.POINTER(struct_ggml_tensor))
 def ggml_abs_inplace(ctx: ctypes._Pointer[struct_ggml_context], a: ctypes._Pointer[struct_ggml_tensor]) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_sgn", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor)], ctypes.POINTER(struct_ggml_tensor), enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_sgn", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor)], ctypes.POINTER(struct_ggml_tensor))
 def ggml_sgn(ctx: ctypes._Pointer[struct_ggml_context], a: ctypes._Pointer[struct_ggml_tensor]) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_sgn_inplace", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor)], ctypes.POINTER(struct_ggml_tensor), enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_sgn_inplace", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor)], ctypes.POINTER(struct_ggml_tensor))
 def ggml_sgn_inplace(ctx: ctypes._Pointer[struct_ggml_context], a: ctypes._Pointer[struct_ggml_tensor]) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_neg", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor)], ctypes.POINTER(struct_ggml_tensor), enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_neg", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor)], ctypes.POINTER(struct_ggml_tensor))
 def ggml_neg(ctx: ctypes._Pointer[struct_ggml_context], a: ctypes._Pointer[struct_ggml_tensor]) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_neg_inplace", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor)], ctypes.POINTER(struct_ggml_tensor), enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_neg_inplace", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor)], ctypes.POINTER(struct_ggml_tensor))
 def ggml_neg_inplace(ctx: ctypes._Pointer[struct_ggml_context], a: ctypes._Pointer[struct_ggml_tensor]) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_step", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor)], ctypes.POINTER(struct_ggml_tensor), enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_step", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor)], ctypes.POINTER(struct_ggml_tensor))
 def ggml_step(ctx: ctypes._Pointer[struct_ggml_context], a: ctypes._Pointer[struct_ggml_tensor]) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_step_inplace", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor)], ctypes.POINTER(struct_ggml_tensor), enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_step_inplace", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor)], ctypes.POINTER(struct_ggml_tensor))
 def ggml_step_inplace(ctx: ctypes._Pointer[struct_ggml_context], a: ctypes._Pointer[struct_ggml_tensor]) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_tanh", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor)], ctypes.POINTER(struct_ggml_tensor), enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_tanh", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor)], ctypes.POINTER(struct_ggml_tensor))
 def ggml_tanh(ctx: ctypes._Pointer[struct_ggml_context], a: ctypes._Pointer[struct_ggml_tensor]) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_tanh_inplace", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor)], ctypes.POINTER(struct_ggml_tensor), enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_tanh_inplace", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor)], ctypes.POINTER(struct_ggml_tensor))
 def ggml_tanh_inplace(ctx: ctypes._Pointer[struct_ggml_context], a: ctypes._Pointer[struct_ggml_tensor]) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_elu", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor)], ctypes.POINTER(struct_ggml_tensor), enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_elu", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor)], ctypes.POINTER(struct_ggml_tensor))
 def ggml_elu(ctx: ctypes._Pointer[struct_ggml_context], a: ctypes._Pointer[struct_ggml_tensor]) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_elu_inplace", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor)], ctypes.POINTER(struct_ggml_tensor), enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_elu_inplace", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor)], ctypes.POINTER(struct_ggml_tensor))
 def ggml_elu_inplace(ctx: ctypes._Pointer[struct_ggml_context], a: ctypes._Pointer[struct_ggml_tensor]) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_relu", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor)], ctypes.POINTER(struct_ggml_tensor), enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_relu", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor)], ctypes.POINTER(struct_ggml_tensor))
 def ggml_relu(ctx: ctypes._Pointer[struct_ggml_context], a: ctypes._Pointer[struct_ggml_tensor]) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_leaky_relu", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.c_float, ctypes.c_bool], ctypes.POINTER(struct_ggml_tensor), enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_leaky_relu", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.c_float, ctypes.c_bool], ctypes.POINTER(struct_ggml_tensor))
 def ggml_leaky_relu(ctx: ctypes._Pointer[struct_ggml_context], a: ctypes._Pointer[struct_ggml_tensor], negative_slope: ctypes.c_float, inplace: ctypes.c_bool) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_relu_inplace", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor)], ctypes.POINTER(struct_ggml_tensor), enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_relu_inplace", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor)], ctypes.POINTER(struct_ggml_tensor))
 def ggml_relu_inplace(ctx: ctypes._Pointer[struct_ggml_context], a: ctypes._Pointer[struct_ggml_tensor]) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_sigmoid", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor)], ctypes.POINTER(struct_ggml_tensor), enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_sigmoid", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor)], ctypes.POINTER(struct_ggml_tensor))
 def ggml_sigmoid(ctx: ctypes._Pointer[struct_ggml_context], a: ctypes._Pointer[struct_ggml_tensor]) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_sigmoid_inplace", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor)], ctypes.POINTER(struct_ggml_tensor), enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_sigmoid_inplace", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor)], ctypes.POINTER(struct_ggml_tensor))
 def ggml_sigmoid_inplace(ctx: ctypes._Pointer[struct_ggml_context], a: ctypes._Pointer[struct_ggml_tensor]) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_gelu", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor)], ctypes.POINTER(struct_ggml_tensor), enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_gelu", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor)], ctypes.POINTER(struct_ggml_tensor))
 def ggml_gelu(ctx: ctypes._Pointer[struct_ggml_context], a: ctypes._Pointer[struct_ggml_tensor]) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_gelu_inplace", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor)], ctypes.POINTER(struct_ggml_tensor), enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_gelu_inplace", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor)], ctypes.POINTER(struct_ggml_tensor))
 def ggml_gelu_inplace(ctx: ctypes._Pointer[struct_ggml_context], a: ctypes._Pointer[struct_ggml_tensor]) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_gelu_erf", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor)], ctypes.POINTER(struct_ggml_tensor), enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_gelu_erf", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor)], ctypes.POINTER(struct_ggml_tensor))
 def ggml_gelu_erf(ctx: ctypes._Pointer[struct_ggml_context], a: ctypes._Pointer[struct_ggml_tensor]) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_gelu_erf_inplace", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor)], ctypes.POINTER(struct_ggml_tensor), enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_gelu_erf_inplace", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor)], ctypes.POINTER(struct_ggml_tensor))
 def ggml_gelu_erf_inplace(ctx: ctypes._Pointer[struct_ggml_context], a: ctypes._Pointer[struct_ggml_tensor]) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_gelu_quick", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor)], ctypes.POINTER(struct_ggml_tensor), enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_gelu_quick", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor)], ctypes.POINTER(struct_ggml_tensor))
 def ggml_gelu_quick(ctx: ctypes._Pointer[struct_ggml_context], a: ctypes._Pointer[struct_ggml_tensor]) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_gelu_quick_inplace", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor)], ctypes.POINTER(struct_ggml_tensor), enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_gelu_quick_inplace", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor)], ctypes.POINTER(struct_ggml_tensor))
 def ggml_gelu_quick_inplace(ctx: ctypes._Pointer[struct_ggml_context], a: ctypes._Pointer[struct_ggml_tensor]) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_silu", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor)], ctypes.POINTER(struct_ggml_tensor), enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_silu", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor)], ctypes.POINTER(struct_ggml_tensor))
 def ggml_silu(ctx: ctypes._Pointer[struct_ggml_context], a: ctypes._Pointer[struct_ggml_tensor]) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_silu_inplace", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor)], ctypes.POINTER(struct_ggml_tensor), enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_silu_inplace", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor)], ctypes.POINTER(struct_ggml_tensor))
 def ggml_silu_inplace(ctx: ctypes._Pointer[struct_ggml_context], a: ctypes._Pointer[struct_ggml_tensor]) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_silu_back", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor)], ctypes.POINTER(struct_ggml_tensor), enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_silu_back", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor)], ctypes.POINTER(struct_ggml_tensor))
 def ggml_silu_back(ctx: ctypes._Pointer[struct_ggml_context], a: ctypes._Pointer[struct_ggml_tensor], b: ctypes._Pointer[struct_ggml_tensor]) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_hardswish", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor)], ctypes.POINTER(struct_ggml_tensor), enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_hardswish", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor)], ctypes.POINTER(struct_ggml_tensor))
 def ggml_hardswish(ctx: ctypes._Pointer[struct_ggml_context], a: ctypes._Pointer[struct_ggml_tensor]) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_hardsigmoid", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor)], ctypes.POINTER(struct_ggml_tensor), enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_hardsigmoid", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor)], ctypes.POINTER(struct_ggml_tensor))
 def ggml_hardsigmoid(ctx: ctypes._Pointer[struct_ggml_context], a: ctypes._Pointer[struct_ggml_tensor]) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_exp", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor)], ctypes.POINTER(struct_ggml_tensor), enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_exp", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor)], ctypes.POINTER(struct_ggml_tensor))
 def ggml_exp(ctx: ctypes._Pointer[struct_ggml_context], a: ctypes._Pointer[struct_ggml_tensor]) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_exp_inplace", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor)], ctypes.POINTER(struct_ggml_tensor), enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_exp_inplace", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor)], ctypes.POINTER(struct_ggml_tensor))
 def ggml_exp_inplace(ctx: ctypes._Pointer[struct_ggml_context], a: ctypes._Pointer[struct_ggml_tensor]) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_norm", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.c_float], ctypes.POINTER(struct_ggml_tensor), enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_norm", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.c_float], ctypes.POINTER(struct_ggml_tensor))
 def ggml_norm(ctx: ctypes._Pointer[struct_ggml_context], a: ctypes._Pointer[struct_ggml_tensor], eps: ctypes.c_float) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_norm_inplace", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.c_float], ctypes.POINTER(struct_ggml_tensor), enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_norm_inplace", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.c_float], ctypes.POINTER(struct_ggml_tensor))
 def ggml_norm_inplace(ctx: ctypes._Pointer[struct_ggml_context], a: ctypes._Pointer[struct_ggml_tensor], eps: ctypes.c_float) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_rms_norm", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.c_float], ctypes.POINTER(struct_ggml_tensor), enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_rms_norm", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.c_float], ctypes.POINTER(struct_ggml_tensor))
 def ggml_rms_norm(ctx: ctypes._Pointer[struct_ggml_context], a: ctypes._Pointer[struct_ggml_tensor], eps: ctypes.c_float) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_rms_norm_inplace", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.c_float], ctypes.POINTER(struct_ggml_tensor), enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_rms_norm_inplace", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.c_float], ctypes.POINTER(struct_ggml_tensor))
 def ggml_rms_norm_inplace(ctx: ctypes._Pointer[struct_ggml_context], a: ctypes._Pointer[struct_ggml_tensor], eps: ctypes.c_float) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_group_norm", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.c_int32, ctypes.c_float], ctypes.POINTER(struct_ggml_tensor), enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_group_norm", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.c_int32, ctypes.c_float], ctypes.POINTER(struct_ggml_tensor))
 def ggml_group_norm(ctx: ctypes._Pointer[struct_ggml_context], a: ctypes._Pointer[struct_ggml_tensor], n_groups: ctypes.c_int32, eps: ctypes.c_float) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_group_norm_inplace", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.c_int32, ctypes.c_float], ctypes.POINTER(struct_ggml_tensor), enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_group_norm_inplace", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.c_int32, ctypes.c_float], ctypes.POINTER(struct_ggml_tensor))
 def ggml_group_norm_inplace(ctx: ctypes._Pointer[struct_ggml_context], a: ctypes._Pointer[struct_ggml_tensor], n_groups: ctypes.c_int32, eps: ctypes.c_float) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_l2_norm", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.c_float], ctypes.POINTER(struct_ggml_tensor), enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_l2_norm", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.c_float], ctypes.POINTER(struct_ggml_tensor))
 def ggml_l2_norm(ctx: ctypes._Pointer[struct_ggml_context], a: ctypes._Pointer[struct_ggml_tensor], eps: ctypes.c_float) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_l2_norm_inplace", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.c_float], ctypes.POINTER(struct_ggml_tensor), enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_l2_norm_inplace", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.c_float], ctypes.POINTER(struct_ggml_tensor))
 def ggml_l2_norm_inplace(ctx: ctypes._Pointer[struct_ggml_context], a: ctypes._Pointer[struct_ggml_tensor], eps: ctypes.c_float) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_rms_norm_back", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor), ctypes.c_float], ctypes.POINTER(struct_ggml_tensor), enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_rms_norm_back", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor), ctypes.c_float], ctypes.POINTER(struct_ggml_tensor))
 def ggml_rms_norm_back(ctx: ctypes._Pointer[struct_ggml_context], a: ctypes._Pointer[struct_ggml_tensor], b: ctypes._Pointer[struct_ggml_tensor], eps: ctypes.c_float) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_mul_mat", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor)], ctypes.POINTER(struct_ggml_tensor), enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_mul_mat", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor)], ctypes.POINTER(struct_ggml_tensor))
 def ggml_mul_mat(ctx: ctypes._Pointer[struct_ggml_context], a: ctypes._Pointer[struct_ggml_tensor], b: ctypes._Pointer[struct_ggml_tensor]) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_mul_mat_set_prec", [ctypes.POINTER(struct_ggml_tensor), ggml_prec], None, enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_mul_mat_set_prec", [ctypes.POINTER(struct_ggml_tensor), ggml_prec], None)
 def ggml_mul_mat_set_prec(a: ctypes._Pointer[struct_ggml_tensor], prec: ggml_prec) -> None:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_mul_mat_id", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor)], ctypes.POINTER(struct_ggml_tensor), enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_mul_mat_id", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor)], ctypes.POINTER(struct_ggml_tensor))
 def ggml_mul_mat_id(ctx: ctypes._Pointer[struct_ggml_context], _as: ctypes._Pointer[struct_ggml_tensor], b: ctypes._Pointer[struct_ggml_tensor], ids: ctypes._Pointer[struct_ggml_tensor]) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_out_prod", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor)], ctypes.POINTER(struct_ggml_tensor), enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_out_prod", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor)], ctypes.POINTER(struct_ggml_tensor))
 def ggml_out_prod(ctx: ctypes._Pointer[struct_ggml_context], a: ctypes._Pointer[struct_ggml_tensor], b: ctypes._Pointer[struct_ggml_tensor]) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_scale", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.c_float], ctypes.POINTER(struct_ggml_tensor), enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_scale", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.c_float], ctypes.POINTER(struct_ggml_tensor))
 def ggml_scale(ctx: ctypes._Pointer[struct_ggml_context], a: ctypes._Pointer[struct_ggml_tensor], s: ctypes.c_float) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_scale_inplace", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.c_float], ctypes.POINTER(struct_ggml_tensor), enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_scale_inplace", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.c_float], ctypes.POINTER(struct_ggml_tensor))
 def ggml_scale_inplace(ctx: ctypes._Pointer[struct_ggml_context], a: ctypes._Pointer[struct_ggml_tensor], s: ctypes.c_float) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_set", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor), size_t, size_t, size_t, size_t], ctypes.POINTER(struct_ggml_tensor), enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_set", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor), size_t, size_t, size_t, size_t], ctypes.POINTER(struct_ggml_tensor))
 def ggml_set(ctx: ctypes._Pointer[struct_ggml_context], a: ctypes._Pointer[struct_ggml_tensor], b: ctypes._Pointer[struct_ggml_tensor], nb1: size_t, nb2: size_t, nb3: size_t, offset: size_t) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_set_inplace", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor), size_t, size_t, size_t, size_t], ctypes.POINTER(struct_ggml_tensor), enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_set_inplace", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor), size_t, size_t, size_t, size_t], ctypes.POINTER(struct_ggml_tensor))
 def ggml_set_inplace(ctx: ctypes._Pointer[struct_ggml_context], a: ctypes._Pointer[struct_ggml_tensor], b: ctypes._Pointer[struct_ggml_tensor], nb1: size_t, nb2: size_t, nb3: size_t, offset: size_t) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_set_1d", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor), size_t], ctypes.POINTER(struct_ggml_tensor), enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_set_1d", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor), size_t], ctypes.POINTER(struct_ggml_tensor))
 def ggml_set_1d(ctx: ctypes._Pointer[struct_ggml_context], a: ctypes._Pointer[struct_ggml_tensor], b: ctypes._Pointer[struct_ggml_tensor], offset: size_t) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_set_1d_inplace", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor), size_t], ctypes.POINTER(struct_ggml_tensor), enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_set_1d_inplace", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor), size_t], ctypes.POINTER(struct_ggml_tensor))
 def ggml_set_1d_inplace(ctx: ctypes._Pointer[struct_ggml_context], a: ctypes._Pointer[struct_ggml_tensor], b: ctypes._Pointer[struct_ggml_tensor], offset: size_t) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_set_2d", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor), size_t, size_t], ctypes.POINTER(struct_ggml_tensor), enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_set_2d", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor), size_t, size_t], ctypes.POINTER(struct_ggml_tensor))
 def ggml_set_2d(ctx: ctypes._Pointer[struct_ggml_context], a: ctypes._Pointer[struct_ggml_tensor], b: ctypes._Pointer[struct_ggml_tensor], nb1: size_t, offset: size_t) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_set_2d_inplace", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor), size_t, size_t], ctypes.POINTER(struct_ggml_tensor), enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_set_2d_inplace", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor), size_t, size_t], ctypes.POINTER(struct_ggml_tensor))
 def ggml_set_2d_inplace(ctx: ctypes._Pointer[struct_ggml_context], a: ctypes._Pointer[struct_ggml_tensor], b: ctypes._Pointer[struct_ggml_tensor], nb1: size_t, offset: size_t) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_cpy", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor)], ctypes.POINTER(struct_ggml_tensor), enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_cpy", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor)], ctypes.POINTER(struct_ggml_tensor))
 def ggml_cpy(ctx: ctypes._Pointer[struct_ggml_context], a: ctypes._Pointer[struct_ggml_tensor], b: ctypes._Pointer[struct_ggml_tensor]) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_cast", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ggml_type], ctypes.POINTER(struct_ggml_tensor), enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_cast", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ggml_type], ctypes.POINTER(struct_ggml_tensor))
 def ggml_cast(ctx: ctypes._Pointer[struct_ggml_context], a: ctypes._Pointer[struct_ggml_tensor], type: ggml_type) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_cont", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor)], ctypes.POINTER(struct_ggml_tensor), enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_cont", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor)], ctypes.POINTER(struct_ggml_tensor))
 def ggml_cont(ctx: ctypes._Pointer[struct_ggml_context], a: ctypes._Pointer[struct_ggml_tensor]) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_cont_1d", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), int64_t], ctypes.POINTER(struct_ggml_tensor), enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_cont_1d", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), int64_t], ctypes.POINTER(struct_ggml_tensor))
 def ggml_cont_1d(ctx: ctypes._Pointer[struct_ggml_context], a: ctypes._Pointer[struct_ggml_tensor], ne0: int64_t) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_cont_2d", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), int64_t, int64_t], ctypes.POINTER(struct_ggml_tensor), enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_cont_2d", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), int64_t, int64_t], ctypes.POINTER(struct_ggml_tensor))
 def ggml_cont_2d(ctx: ctypes._Pointer[struct_ggml_context], a: ctypes._Pointer[struct_ggml_tensor], ne0: int64_t, ne1: int64_t) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_cont_3d", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), int64_t, int64_t, int64_t], ctypes.POINTER(struct_ggml_tensor), enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_cont_3d", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), int64_t, int64_t, int64_t], ctypes.POINTER(struct_ggml_tensor))
 def ggml_cont_3d(ctx: ctypes._Pointer[struct_ggml_context], a: ctypes._Pointer[struct_ggml_tensor], ne0: int64_t, ne1: int64_t, ne2: int64_t) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_cont_4d", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), int64_t, int64_t, int64_t, int64_t], ctypes.POINTER(struct_ggml_tensor), enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_cont_4d", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), int64_t, int64_t, int64_t, int64_t], ctypes.POINTER(struct_ggml_tensor))
 def ggml_cont_4d(ctx: ctypes._Pointer[struct_ggml_context], a: ctypes._Pointer[struct_ggml_tensor], ne0: int64_t, ne1: int64_t, ne2: int64_t, ne3: int64_t) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_reshape", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor)], ctypes.POINTER(struct_ggml_tensor), enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_reshape", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor)], ctypes.POINTER(struct_ggml_tensor))
 def ggml_reshape(ctx: ctypes._Pointer[struct_ggml_context], a: ctypes._Pointer[struct_ggml_tensor], b: ctypes._Pointer[struct_ggml_tensor]) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_reshape_1d", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), int64_t], ctypes.POINTER(struct_ggml_tensor), enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_reshape_1d", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), int64_t], ctypes.POINTER(struct_ggml_tensor))
 def ggml_reshape_1d(ctx: ctypes._Pointer[struct_ggml_context], a: ctypes._Pointer[struct_ggml_tensor], ne0: int64_t) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_reshape_2d", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), int64_t, int64_t], ctypes.POINTER(struct_ggml_tensor), enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_reshape_2d", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), int64_t, int64_t], ctypes.POINTER(struct_ggml_tensor))
 def ggml_reshape_2d(ctx: ctypes._Pointer[struct_ggml_context], a: ctypes._Pointer[struct_ggml_tensor], ne0: int64_t, ne1: int64_t) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_reshape_3d", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), int64_t, int64_t, int64_t], ctypes.POINTER(struct_ggml_tensor), enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_reshape_3d", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), int64_t, int64_t, int64_t], ctypes.POINTER(struct_ggml_tensor))
 def ggml_reshape_3d(ctx: ctypes._Pointer[struct_ggml_context], a: ctypes._Pointer[struct_ggml_tensor], ne0: int64_t, ne1: int64_t, ne2: int64_t) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_reshape_4d", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), int64_t, int64_t, int64_t, int64_t], ctypes.POINTER(struct_ggml_tensor), enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_reshape_4d", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), int64_t, int64_t, int64_t, int64_t], ctypes.POINTER(struct_ggml_tensor))
 def ggml_reshape_4d(ctx: ctypes._Pointer[struct_ggml_context], a: ctypes._Pointer[struct_ggml_tensor], ne0: int64_t, ne1: int64_t, ne2: int64_t, ne3: int64_t) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_view_1d", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), int64_t, size_t], ctypes.POINTER(struct_ggml_tensor), enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_view_1d", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), int64_t, size_t], ctypes.POINTER(struct_ggml_tensor))
 def ggml_view_1d(ctx: ctypes._Pointer[struct_ggml_context], a: ctypes._Pointer[struct_ggml_tensor], ne0: int64_t, offset: size_t) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_view_2d", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), int64_t, int64_t, size_t, size_t], ctypes.POINTER(struct_ggml_tensor), enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_view_2d", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), int64_t, int64_t, size_t, size_t], ctypes.POINTER(struct_ggml_tensor))
 def ggml_view_2d(ctx: ctypes._Pointer[struct_ggml_context], a: ctypes._Pointer[struct_ggml_tensor], ne0: int64_t, ne1: int64_t, nb1: size_t, offset: size_t) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_view_3d", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), int64_t, int64_t, int64_t, size_t, size_t, size_t], ctypes.POINTER(struct_ggml_tensor), enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_view_3d", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), int64_t, int64_t, int64_t, size_t, size_t, size_t], ctypes.POINTER(struct_ggml_tensor))
 def ggml_view_3d(ctx: ctypes._Pointer[struct_ggml_context], a: ctypes._Pointer[struct_ggml_tensor], ne0: int64_t, ne1: int64_t, ne2: int64_t, nb1: size_t, nb2: size_t, offset: size_t) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_view_4d", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), int64_t, int64_t, int64_t, int64_t, size_t, size_t, size_t, size_t], ctypes.POINTER(struct_ggml_tensor), enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_view_4d", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), int64_t, int64_t, int64_t, int64_t, size_t, size_t, size_t, size_t], ctypes.POINTER(struct_ggml_tensor))
 def ggml_view_4d(ctx: ctypes._Pointer[struct_ggml_context], a: ctypes._Pointer[struct_ggml_tensor], ne0: int64_t, ne1: int64_t, ne2: int64_t, ne3: int64_t, nb1: size_t, nb2: size_t, nb3: size_t, offset: size_t) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_permute", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.c_int32, ctypes.c_int32, ctypes.c_int32, ctypes.c_int32], ctypes.POINTER(struct_ggml_tensor), enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_permute", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.c_int32, ctypes.c_int32, ctypes.c_int32, ctypes.c_int32], ctypes.POINTER(struct_ggml_tensor))
 def ggml_permute(ctx: ctypes._Pointer[struct_ggml_context], a: ctypes._Pointer[struct_ggml_tensor], axis0: ctypes.c_int32, axis1: ctypes.c_int32, axis2: ctypes.c_int32, axis3: ctypes.c_int32) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_transpose", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor)], ctypes.POINTER(struct_ggml_tensor), enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_transpose", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor)], ctypes.POINTER(struct_ggml_tensor))
 def ggml_transpose(ctx: ctypes._Pointer[struct_ggml_context], a: ctypes._Pointer[struct_ggml_tensor]) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_get_rows", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor)], ctypes.POINTER(struct_ggml_tensor), enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_get_rows", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor)], ctypes.POINTER(struct_ggml_tensor))
 def ggml_get_rows(ctx: ctypes._Pointer[struct_ggml_context], a: ctypes._Pointer[struct_ggml_tensor], b: ctypes._Pointer[struct_ggml_tensor]) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_get_rows_back", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor)], ctypes.POINTER(struct_ggml_tensor), enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_get_rows_back", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor)], ctypes.POINTER(struct_ggml_tensor))
 def ggml_get_rows_back(ctx: ctypes._Pointer[struct_ggml_context], a: ctypes._Pointer[struct_ggml_tensor], b: ctypes._Pointer[struct_ggml_tensor], c: ctypes._Pointer[struct_ggml_tensor]) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_diag", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor)], ctypes.POINTER(struct_ggml_tensor), enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_diag", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor)], ctypes.POINTER(struct_ggml_tensor))
 def ggml_diag(ctx: ctypes._Pointer[struct_ggml_context], a: ctypes._Pointer[struct_ggml_tensor]) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_diag_mask_inf", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.c_int32], ctypes.POINTER(struct_ggml_tensor), enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_diag_mask_inf", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.c_int32], ctypes.POINTER(struct_ggml_tensor))
 def ggml_diag_mask_inf(ctx: ctypes._Pointer[struct_ggml_context], a: ctypes._Pointer[struct_ggml_tensor], n_past: ctypes.c_int32) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_diag_mask_inf_inplace", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.c_int32], ctypes.POINTER(struct_ggml_tensor), enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_diag_mask_inf_inplace", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.c_int32], ctypes.POINTER(struct_ggml_tensor))
 def ggml_diag_mask_inf_inplace(ctx: ctypes._Pointer[struct_ggml_context], a: ctypes._Pointer[struct_ggml_tensor], n_past: ctypes.c_int32) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_diag_mask_zero", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.c_int32], ctypes.POINTER(struct_ggml_tensor), enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_diag_mask_zero", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.c_int32], ctypes.POINTER(struct_ggml_tensor))
 def ggml_diag_mask_zero(ctx: ctypes._Pointer[struct_ggml_context], a: ctypes._Pointer[struct_ggml_tensor], n_past: ctypes.c_int32) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_diag_mask_zero_inplace", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.c_int32], ctypes.POINTER(struct_ggml_tensor), enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_diag_mask_zero_inplace", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.c_int32], ctypes.POINTER(struct_ggml_tensor))
 def ggml_diag_mask_zero_inplace(ctx: ctypes._Pointer[struct_ggml_context], a: ctypes._Pointer[struct_ggml_tensor], n_past: ctypes.c_int32) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_soft_max", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor)], ctypes.POINTER(struct_ggml_tensor), enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_soft_max", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor)], ctypes.POINTER(struct_ggml_tensor))
 def ggml_soft_max(ctx: ctypes._Pointer[struct_ggml_context], a: ctypes._Pointer[struct_ggml_tensor]) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_soft_max_inplace", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor)], ctypes.POINTER(struct_ggml_tensor), enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_soft_max_inplace", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor)], ctypes.POINTER(struct_ggml_tensor))
 def ggml_soft_max_inplace(ctx: ctypes._Pointer[struct_ggml_context], a: ctypes._Pointer[struct_ggml_tensor]) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_soft_max_ext", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor), ctypes.c_float, ctypes.c_float], ctypes.POINTER(struct_ggml_tensor), enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_soft_max_ext", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor), ctypes.c_float, ctypes.c_float], ctypes.POINTER(struct_ggml_tensor))
 def ggml_soft_max_ext(ctx: ctypes._Pointer[struct_ggml_context], a: ctypes._Pointer[struct_ggml_tensor], mask: ctypes._Pointer[struct_ggml_tensor], scale: ctypes.c_float, max_bias: ctypes.c_float) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_soft_max_ext_back", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor), ctypes.c_float, ctypes.c_float], ctypes.POINTER(struct_ggml_tensor), enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_soft_max_ext_back", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor), ctypes.c_float, ctypes.c_float], ctypes.POINTER(struct_ggml_tensor))
 def ggml_soft_max_ext_back(ctx: ctypes._Pointer[struct_ggml_context], a: ctypes._Pointer[struct_ggml_tensor], b: ctypes._Pointer[struct_ggml_tensor], scale: ctypes.c_float, max_bias: ctypes.c_float) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_soft_max_ext_back_inplace", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor), ctypes.c_float, ctypes.c_float], ctypes.POINTER(struct_ggml_tensor), enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_soft_max_ext_back_inplace", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor), ctypes.c_float, ctypes.c_float], ctypes.POINTER(struct_ggml_tensor))
 def ggml_soft_max_ext_back_inplace(ctx: ctypes._Pointer[struct_ggml_context], a: ctypes._Pointer[struct_ggml_tensor], b: ctypes._Pointer[struct_ggml_tensor], scale: ctypes.c_float, max_bias: ctypes.c_float) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_rope", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor), ctypes.c_int32, ctypes.c_int32], ctypes.POINTER(struct_ggml_tensor), enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_rope", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor), ctypes.c_int32, ctypes.c_int32], ctypes.POINTER(struct_ggml_tensor))
 def ggml_rope(ctx: ctypes._Pointer[struct_ggml_context], a: ctypes._Pointer[struct_ggml_tensor], b: ctypes._Pointer[struct_ggml_tensor], n_dims: ctypes.c_int32, mode: ctypes.c_int32) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_rope_inplace", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor), ctypes.c_int32, ctypes.c_int32], ctypes.POINTER(struct_ggml_tensor), enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_rope_inplace", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor), ctypes.c_int32, ctypes.c_int32], ctypes.POINTER(struct_ggml_tensor))
 def ggml_rope_inplace(ctx: ctypes._Pointer[struct_ggml_context], a: ctypes._Pointer[struct_ggml_tensor], b: ctypes._Pointer[struct_ggml_tensor], n_dims: ctypes.c_int32, mode: ctypes.c_int32) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_rope_ext", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor), ctypes.c_int32, ctypes.c_int32, ctypes.c_int32, ctypes.c_float, ctypes.c_float, ctypes.c_float, ctypes.c_float, ctypes.c_float, ctypes.c_float], ctypes.POINTER(struct_ggml_tensor), enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_rope_ext", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor), ctypes.c_int32, ctypes.c_int32, ctypes.c_int32, ctypes.c_float, ctypes.c_float, ctypes.c_float, ctypes.c_float, ctypes.c_float, ctypes.c_float], ctypes.POINTER(struct_ggml_tensor))
 def ggml_rope_ext(ctx: ctypes._Pointer[struct_ggml_context], a: ctypes._Pointer[struct_ggml_tensor], b: ctypes._Pointer[struct_ggml_tensor], c: ctypes._Pointer[struct_ggml_tensor], n_dims: ctypes.c_int32, mode: ctypes.c_int32, n_ctx_orig: ctypes.c_int32, freq_base: ctypes.c_float, freq_scale: ctypes.c_float, ext_factor: ctypes.c_float, attn_factor: ctypes.c_float, beta_fast: ctypes.c_float, beta_slow: ctypes.c_float) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_rope_multi", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor), ctypes.c_int32, ctypes.c_int32 * 4, ctypes.c_int32, ctypes.c_int32, ctypes.c_float, ctypes.c_float, ctypes.c_float, ctypes.c_float, ctypes.c_float, ctypes.c_float], ctypes.POINTER(struct_ggml_tensor), enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_rope_multi", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor), ctypes.c_int32, ctypes.c_int32 * 4, ctypes.c_int32, ctypes.c_int32, ctypes.c_float, ctypes.c_float, ctypes.c_float, ctypes.c_float, ctypes.c_float, ctypes.c_float], ctypes.POINTER(struct_ggml_tensor))
 def ggml_rope_multi(ctx: ctypes._Pointer[struct_ggml_context], a: ctypes._Pointer[struct_ggml_tensor], b: ctypes._Pointer[struct_ggml_tensor], c: ctypes._Pointer[struct_ggml_tensor], n_dims: ctypes.c_int32, sections: ctypes.Array[ctypes.c_int32], mode: ctypes.c_int32, n_ctx_orig: ctypes.c_int32, freq_base: ctypes.c_float, freq_scale: ctypes.c_float, ext_factor: ctypes.c_float, attn_factor: ctypes.c_float, beta_fast: ctypes.c_float, beta_slow: ctypes.c_float) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_rope_ext_inplace", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor), ctypes.c_int32, ctypes.c_int32, ctypes.c_int32, ctypes.c_float, ctypes.c_float, ctypes.c_float, ctypes.c_float, ctypes.c_float, ctypes.c_float], ctypes.POINTER(struct_ggml_tensor), enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_rope_ext_inplace", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor), ctypes.c_int32, ctypes.c_int32, ctypes.c_int32, ctypes.c_float, ctypes.c_float, ctypes.c_float, ctypes.c_float, ctypes.c_float, ctypes.c_float], ctypes.POINTER(struct_ggml_tensor))
 def ggml_rope_ext_inplace(ctx: ctypes._Pointer[struct_ggml_context], a: ctypes._Pointer[struct_ggml_tensor], b: ctypes._Pointer[struct_ggml_tensor], c: ctypes._Pointer[struct_ggml_tensor], n_dims: ctypes.c_int32, mode: ctypes.c_int32, n_ctx_orig: ctypes.c_int32, freq_base: ctypes.c_float, freq_scale: ctypes.c_float, ext_factor: ctypes.c_float, attn_factor: ctypes.c_float, beta_fast: ctypes.c_float, beta_slow: ctypes.c_float) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_rope_custom", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor), ctypes.c_int32, ctypes.c_int32, ctypes.c_int32, ctypes.c_float, ctypes.c_float, ctypes.c_float, ctypes.c_float, ctypes.c_float, ctypes.c_float], ctypes.POINTER(struct_ggml_tensor), enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_rope_custom", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor), ctypes.c_int32, ctypes.c_int32, ctypes.c_int32, ctypes.c_float, ctypes.c_float, ctypes.c_float, ctypes.c_float, ctypes.c_float, ctypes.c_float], ctypes.POINTER(struct_ggml_tensor))
 def ggml_rope_custom(ctx: ctypes._Pointer[struct_ggml_context], a: ctypes._Pointer[struct_ggml_tensor], b: ctypes._Pointer[struct_ggml_tensor], n_dims: ctypes.c_int32, mode: ctypes.c_int32, n_ctx_orig: ctypes.c_int32, freq_base: ctypes.c_float, freq_scale: ctypes.c_float, ext_factor: ctypes.c_float, attn_factor: ctypes.c_float, beta_fast: ctypes.c_float, beta_slow: ctypes.c_float) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_rope_custom_inplace", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor), ctypes.c_int32, ctypes.c_int32, ctypes.c_int32, ctypes.c_float, ctypes.c_float, ctypes.c_float, ctypes.c_float, ctypes.c_float, ctypes.c_float], ctypes.POINTER(struct_ggml_tensor), enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_rope_custom_inplace", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor), ctypes.c_int32, ctypes.c_int32, ctypes.c_int32, ctypes.c_float, ctypes.c_float, ctypes.c_float, ctypes.c_float, ctypes.c_float, ctypes.c_float], ctypes.POINTER(struct_ggml_tensor))
 def ggml_rope_custom_inplace(ctx: ctypes._Pointer[struct_ggml_context], a: ctypes._Pointer[struct_ggml_tensor], b: ctypes._Pointer[struct_ggml_tensor], n_dims: ctypes.c_int32, mode: ctypes.c_int32, n_ctx_orig: ctypes.c_int32, freq_base: ctypes.c_float, freq_scale: ctypes.c_float, ext_factor: ctypes.c_float, attn_factor: ctypes.c_float, beta_fast: ctypes.c_float, beta_slow: ctypes.c_float) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_rope_yarn_corr_dims", [ctypes.c_int32, ctypes.c_int32, ctypes.c_float, ctypes.c_float, ctypes.c_float, ctypes.c_float * 2], None, enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_rope_yarn_corr_dims", [ctypes.c_int32, ctypes.c_int32, ctypes.c_float, ctypes.c_float, ctypes.c_float, ctypes.c_float * 2], None)
 def ggml_rope_yarn_corr_dims(n_dims: ctypes.c_int32, n_ctx_orig: ctypes.c_int32, freq_base: ctypes.c_float, beta_fast: ctypes.c_float, beta_slow: ctypes.c_float, dims: ctypes.Array[ctypes.c_float]) -> None:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_rope_ext_back", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor), ctypes.c_int32, ctypes.c_int32, ctypes.c_int32, ctypes.c_float, ctypes.c_float, ctypes.c_float, ctypes.c_float, ctypes.c_float, ctypes.c_float], ctypes.POINTER(struct_ggml_tensor), enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_rope_ext_back", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor), ctypes.c_int32, ctypes.c_int32, ctypes.c_int32, ctypes.c_float, ctypes.c_float, ctypes.c_float, ctypes.c_float, ctypes.c_float, ctypes.c_float], ctypes.POINTER(struct_ggml_tensor))
 def ggml_rope_ext_back(ctx: ctypes._Pointer[struct_ggml_context], a: ctypes._Pointer[struct_ggml_tensor], b: ctypes._Pointer[struct_ggml_tensor], c: ctypes._Pointer[struct_ggml_tensor], n_dims: ctypes.c_int32, mode: ctypes.c_int32, n_ctx_orig: ctypes.c_int32, freq_base: ctypes.c_float, freq_scale: ctypes.c_float, ext_factor: ctypes.c_float, attn_factor: ctypes.c_float, beta_fast: ctypes.c_float, beta_slow: ctypes.c_float) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_rope_multi_back", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor), ctypes.c_int32, ctypes.c_int32 * 4, ctypes.c_int32, ctypes.c_int32, ctypes.c_float, ctypes.c_float, ctypes.c_float, ctypes.c_float, ctypes.c_float, ctypes.c_float], ctypes.POINTER(struct_ggml_tensor), enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_rope_multi_back", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor), ctypes.c_int32, ctypes.c_int32 * 4, ctypes.c_int32, ctypes.c_int32, ctypes.c_float, ctypes.c_float, ctypes.c_float, ctypes.c_float, ctypes.c_float, ctypes.c_float], ctypes.POINTER(struct_ggml_tensor))
 def ggml_rope_multi_back(ctx: ctypes._Pointer[struct_ggml_context], a: ctypes._Pointer[struct_ggml_tensor], b: ctypes._Pointer[struct_ggml_tensor], c: ctypes._Pointer[struct_ggml_tensor], n_dims: ctypes.c_int32, sections: ctypes.Array[ctypes.c_int32], mode: ctypes.c_int32, n_ctx_orig: ctypes.c_int32, freq_base: ctypes.c_float, freq_scale: ctypes.c_float, ext_factor: ctypes.c_float, attn_factor: ctypes.c_float, beta_fast: ctypes.c_float, beta_slow: ctypes.c_float) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_clamp", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.c_float, ctypes.c_float], ctypes.POINTER(struct_ggml_tensor), enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_clamp", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.c_float, ctypes.c_float], ctypes.POINTER(struct_ggml_tensor))
 def ggml_clamp(ctx: ctypes._Pointer[struct_ggml_context], a: ctypes._Pointer[struct_ggml_tensor], min: ctypes.c_float, max: ctypes.c_float) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_im2col", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor), ctypes.c_int32, ctypes.c_int32, ctypes.c_int32, ctypes.c_int32, ctypes.c_int32, ctypes.c_int32, ctypes.c_bool, ggml_type], ctypes.POINTER(struct_ggml_tensor), enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_im2col", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor), ctypes.c_int32, ctypes.c_int32, ctypes.c_int32, ctypes.c_int32, ctypes.c_int32, ctypes.c_int32, ctypes.c_bool, ggml_type], ctypes.POINTER(struct_ggml_tensor))
 def ggml_im2col(ctx: ctypes._Pointer[struct_ggml_context], a: ctypes._Pointer[struct_ggml_tensor], b: ctypes._Pointer[struct_ggml_tensor], s0: ctypes.c_int32, s1: ctypes.c_int32, p0: ctypes.c_int32, p1: ctypes.c_int32, d0: ctypes.c_int32, d1: ctypes.c_int32, is_2D: ctypes.c_bool, dst_type: ggml_type) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_im2col_back", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(ctypes.c_int64), ctypes.c_int32, ctypes.c_int32, ctypes.c_int32, ctypes.c_int32, ctypes.c_int32, ctypes.c_int32, ctypes.c_bool], ctypes.POINTER(struct_ggml_tensor), enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_im2col_back", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(ctypes.c_int64), ctypes.c_int32, ctypes.c_int32, ctypes.c_int32, ctypes.c_int32, ctypes.c_int32, ctypes.c_int32, ctypes.c_bool], ctypes.POINTER(struct_ggml_tensor))
 def ggml_im2col_back(ctx: ctypes._Pointer[struct_ggml_context], a: ctypes._Pointer[struct_ggml_tensor], b: ctypes._Pointer[struct_ggml_tensor], ne: ctypes._Pointer[ctypes.c_int64], s0: ctypes.c_int32, s1: ctypes.c_int32, p0: ctypes.c_int32, p1: ctypes.c_int32, d0: ctypes.c_int32, d1: ctypes.c_int32, is_2D: ctypes.c_bool) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_conv_1d", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor), ctypes.c_int32, ctypes.c_int32, ctypes.c_int32], ctypes.POINTER(struct_ggml_tensor), enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_conv_1d", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor), ctypes.c_int32, ctypes.c_int32, ctypes.c_int32], ctypes.POINTER(struct_ggml_tensor))
 def ggml_conv_1d(ctx: ctypes._Pointer[struct_ggml_context], a: ctypes._Pointer[struct_ggml_tensor], b: ctypes._Pointer[struct_ggml_tensor], s0: ctypes.c_int32, p0: ctypes.c_int32, d0: ctypes.c_int32) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_conv_1d_ph", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor), ctypes.c_int32, ctypes.c_int32], ctypes.POINTER(struct_ggml_tensor), enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_conv_1d_ph", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor), ctypes.c_int32, ctypes.c_int32], ctypes.POINTER(struct_ggml_tensor))
 def ggml_conv_1d_ph(ctx: ctypes._Pointer[struct_ggml_context], a: ctypes._Pointer[struct_ggml_tensor], b: ctypes._Pointer[struct_ggml_tensor], s: ctypes.c_int32, d: ctypes.c_int32) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_conv_1d_dw", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor), ctypes.c_int32, ctypes.c_int32, ctypes.c_int32], ctypes.POINTER(struct_ggml_tensor), enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_conv_1d_dw", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor), ctypes.c_int32, ctypes.c_int32, ctypes.c_int32], ctypes.POINTER(struct_ggml_tensor))
 def ggml_conv_1d_dw(ctx: ctypes._Pointer[struct_ggml_context], a: ctypes._Pointer[struct_ggml_tensor], b: ctypes._Pointer[struct_ggml_tensor], s0: ctypes.c_int32, p0: ctypes.c_int32, d0: ctypes.c_int32) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_conv_1d_dw_ph", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor), ctypes.c_int32, ctypes.c_int32], ctypes.POINTER(struct_ggml_tensor), enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_conv_1d_dw_ph", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor), ctypes.c_int32, ctypes.c_int32], ctypes.POINTER(struct_ggml_tensor))
 def ggml_conv_1d_dw_ph(ctx: ctypes._Pointer[struct_ggml_context], a: ctypes._Pointer[struct_ggml_tensor], b: ctypes._Pointer[struct_ggml_tensor], s0: ctypes.c_int32, d0: ctypes.c_int32) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_conv_transpose_1d", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor), ctypes.c_int32, ctypes.c_int32, ctypes.c_int32], ctypes.POINTER(struct_ggml_tensor), enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_conv_transpose_1d", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor), ctypes.c_int32, ctypes.c_int32, ctypes.c_int32], ctypes.POINTER(struct_ggml_tensor))
 def ggml_conv_transpose_1d(ctx: ctypes._Pointer[struct_ggml_context], a: ctypes._Pointer[struct_ggml_tensor], b: ctypes._Pointer[struct_ggml_tensor], s0: ctypes.c_int32, p0: ctypes.c_int32, d0: ctypes.c_int32) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_conv_2d", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor), ctypes.c_int32, ctypes.c_int32, ctypes.c_int32, ctypes.c_int32, ctypes.c_int32, ctypes.c_int32], ctypes.POINTER(struct_ggml_tensor), enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_conv_2d", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor), ctypes.c_int32, ctypes.c_int32, ctypes.c_int32, ctypes.c_int32, ctypes.c_int32, ctypes.c_int32], ctypes.POINTER(struct_ggml_tensor))
 def ggml_conv_2d(ctx: ctypes._Pointer[struct_ggml_context], a: ctypes._Pointer[struct_ggml_tensor], b: ctypes._Pointer[struct_ggml_tensor], s0: ctypes.c_int32, s1: ctypes.c_int32, p0: ctypes.c_int32, p1: ctypes.c_int32, d0: ctypes.c_int32, d1: ctypes.c_int32) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_conv_2d_sk_p0", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor)], ctypes.POINTER(struct_ggml_tensor), enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_conv_2d_sk_p0", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor)], ctypes.POINTER(struct_ggml_tensor))
 def ggml_conv_2d_sk_p0(ctx: ctypes._Pointer[struct_ggml_context], a: ctypes._Pointer[struct_ggml_tensor], b: ctypes._Pointer[struct_ggml_tensor]) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_conv_2d_s1_ph", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor)], ctypes.POINTER(struct_ggml_tensor), enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_conv_2d_s1_ph", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor)], ctypes.POINTER(struct_ggml_tensor))
 def ggml_conv_2d_s1_ph(ctx: ctypes._Pointer[struct_ggml_context], a: ctypes._Pointer[struct_ggml_tensor], b: ctypes._Pointer[struct_ggml_tensor]) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_conv_2d_dw", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor), ctypes.c_int32, ctypes.c_int32, ctypes.c_int32, ctypes.c_int32, ctypes.c_int32, ctypes.c_int32], ctypes.POINTER(struct_ggml_tensor), enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_conv_2d_dw", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor), ctypes.c_int32, ctypes.c_int32, ctypes.c_int32, ctypes.c_int32, ctypes.c_int32, ctypes.c_int32], ctypes.POINTER(struct_ggml_tensor))
 def ggml_conv_2d_dw(ctx: ctypes._Pointer[struct_ggml_context], a: ctypes._Pointer[struct_ggml_tensor], b: ctypes._Pointer[struct_ggml_tensor], s0: ctypes.c_int32, s1: ctypes.c_int32, p0: ctypes.c_int32, p1: ctypes.c_int32, d0: ctypes.c_int32, d1: ctypes.c_int32) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_conv_2d_dw_direct", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor), ctypes.c_int32, ctypes.c_int32, ctypes.c_int32, ctypes.c_int32, ctypes.c_int32, ctypes.c_int32], ctypes.POINTER(struct_ggml_tensor), enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_conv_2d_dw_direct", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor), ctypes.c_int32, ctypes.c_int32, ctypes.c_int32, ctypes.c_int32, ctypes.c_int32, ctypes.c_int32], ctypes.POINTER(struct_ggml_tensor))
 def ggml_conv_2d_dw_direct(ctx: ctypes._Pointer[struct_ggml_context], a: ctypes._Pointer[struct_ggml_tensor], b: ctypes._Pointer[struct_ggml_tensor], stride0: ctypes.c_int32, stride1: ctypes.c_int32, pad0: ctypes.c_int32, pad1: ctypes.c_int32, dilation0: ctypes.c_int32, dilation1: ctypes.c_int32) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_conv_transpose_2d_p0", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor), ctypes.c_int32], ctypes.POINTER(struct_ggml_tensor), enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_conv_transpose_2d_p0", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor), ctypes.c_int32], ctypes.POINTER(struct_ggml_tensor))
 def ggml_conv_transpose_2d_p0(ctx: ctypes._Pointer[struct_ggml_context], a: ctypes._Pointer[struct_ggml_tensor], b: ctypes._Pointer[struct_ggml_tensor], stride: ctypes.c_int32) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
 
@@ -1692,15 +1693,15 @@ GGML_OP_POOL_MAX = 0
 GGML_OP_POOL_AVG = 1
 GGML_OP_POOL_COUNT = 2
 ggml_op_pool = ctypes.c_uint32 # enum
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_pool_1d", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ggml_op_pool, ctypes.c_int32, ctypes.c_int32, ctypes.c_int32], ctypes.POINTER(struct_ggml_tensor), enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_pool_1d", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ggml_op_pool, ctypes.c_int32, ctypes.c_int32, ctypes.c_int32], ctypes.POINTER(struct_ggml_tensor))
 def ggml_pool_1d(ctx: ctypes._Pointer[struct_ggml_context], a: ctypes._Pointer[struct_ggml_tensor], op: ggml_op_pool, k0: ctypes.c_int32, s0: ctypes.c_int32, p0: ctypes.c_int32) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_pool_2d", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ggml_op_pool, ctypes.c_int32, ctypes.c_int32, ctypes.c_int32, ctypes.c_int32, ctypes.c_float, ctypes.c_float], ctypes.POINTER(struct_ggml_tensor), enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_pool_2d", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ggml_op_pool, ctypes.c_int32, ctypes.c_int32, ctypes.c_int32, ctypes.c_int32, ctypes.c_float, ctypes.c_float], ctypes.POINTER(struct_ggml_tensor))
 def ggml_pool_2d(ctx: ctypes._Pointer[struct_ggml_context], a: ctypes._Pointer[struct_ggml_tensor], op: ggml_op_pool, k0: ctypes.c_int32, k1: ctypes.c_int32, s0: ctypes.c_int32, s1: ctypes.c_int32, p0: ctypes.c_float, p1: ctypes.c_float) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_pool_2d_back", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor), ggml_op_pool, ctypes.c_int32, ctypes.c_int32, ctypes.c_int32, ctypes.c_int32, ctypes.c_float, ctypes.c_float], ctypes.POINTER(struct_ggml_tensor), enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_pool_2d_back", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor), ggml_op_pool, ctypes.c_int32, ctypes.c_int32, ctypes.c_int32, ctypes.c_int32, ctypes.c_float, ctypes.c_float], ctypes.POINTER(struct_ggml_tensor))
 def ggml_pool_2d_back(ctx: ctypes._Pointer[struct_ggml_context], a: ctypes._Pointer[struct_ggml_tensor], af: ctypes._Pointer[struct_ggml_tensor], op: ggml_op_pool, k0: ctypes.c_int32, k1: ctypes.c_int32, s0: ctypes.c_int32, s1: ctypes.c_int32, p0: ctypes.c_float, p1: ctypes.c_float) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
 
@@ -1713,23 +1714,23 @@ ggml_scale_mode__enumvalues = {
 GGML_SCALE_MODE_NEAREST = 0
 GGML_SCALE_MODE_BILINEAR = 1
 ggml_scale_mode = ctypes.c_uint32 # enum
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_upscale", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.c_int32, ggml_scale_mode], ctypes.POINTER(struct_ggml_tensor), enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_upscale", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.c_int32, ggml_scale_mode], ctypes.POINTER(struct_ggml_tensor))
 def ggml_upscale(ctx: ctypes._Pointer[struct_ggml_context], a: ctypes._Pointer[struct_ggml_tensor], scale_factor: ctypes.c_int32, mode: ggml_scale_mode) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_upscale_ext", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.c_int32, ctypes.c_int32, ctypes.c_int32, ctypes.c_int32, ggml_scale_mode], ctypes.POINTER(struct_ggml_tensor), enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_upscale_ext", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.c_int32, ctypes.c_int32, ctypes.c_int32, ctypes.c_int32, ggml_scale_mode], ctypes.POINTER(struct_ggml_tensor))
 def ggml_upscale_ext(ctx: ctypes._Pointer[struct_ggml_context], a: ctypes._Pointer[struct_ggml_tensor], ne0: ctypes.c_int32, ne1: ctypes.c_int32, ne2: ctypes.c_int32, ne3: ctypes.c_int32, mode: ggml_scale_mode) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_pad", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.c_int32, ctypes.c_int32, ctypes.c_int32, ctypes.c_int32], ctypes.POINTER(struct_ggml_tensor), enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_pad", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.c_int32, ctypes.c_int32, ctypes.c_int32, ctypes.c_int32], ctypes.POINTER(struct_ggml_tensor))
 def ggml_pad(ctx: ctypes._Pointer[struct_ggml_context], a: ctypes._Pointer[struct_ggml_tensor], p0: ctypes.c_int32, p1: ctypes.c_int32, p2: ctypes.c_int32, p3: ctypes.c_int32) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_pad_reflect_1d", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.c_int32, ctypes.c_int32], ctypes.POINTER(struct_ggml_tensor), enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_pad_reflect_1d", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.c_int32, ctypes.c_int32], ctypes.POINTER(struct_ggml_tensor))
 def ggml_pad_reflect_1d(ctx: ctypes._Pointer[struct_ggml_context], a: ctypes._Pointer[struct_ggml_tensor], p0: ctypes.c_int32, p1: ctypes.c_int32) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_timestep_embedding", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.c_int32, ctypes.c_int32], ctypes.POINTER(struct_ggml_tensor), enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_timestep_embedding", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.c_int32, ctypes.c_int32], ctypes.POINTER(struct_ggml_tensor))
 def ggml_timestep_embedding(ctx: ctypes._Pointer[struct_ggml_context], timesteps: ctypes._Pointer[struct_ggml_tensor], dim: ctypes.c_int32, max_period: ctypes.c_int32) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
 
@@ -1742,127 +1743,127 @@ ggml_sort_order__enumvalues = {
 GGML_SORT_ORDER_ASC = 0
 GGML_SORT_ORDER_DESC = 1
 ggml_sort_order = ctypes.c_uint32 # enum
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_argsort", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ggml_sort_order], ctypes.POINTER(struct_ggml_tensor), enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_argsort", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ggml_sort_order], ctypes.POINTER(struct_ggml_tensor))
 def ggml_argsort(ctx: ctypes._Pointer[struct_ggml_context], a: ctypes._Pointer[struct_ggml_tensor], order: ggml_sort_order) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_arange", [ctypes.POINTER(struct_ggml_context), ctypes.c_float, ctypes.c_float, ctypes.c_float], ctypes.POINTER(struct_ggml_tensor), enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_arange", [ctypes.POINTER(struct_ggml_context), ctypes.c_float, ctypes.c_float, ctypes.c_float], ctypes.POINTER(struct_ggml_tensor))
 def ggml_arange(ctx: ctypes._Pointer[struct_ggml_context], start: ctypes.c_float, stop: ctypes.c_float, step: ctypes.c_float) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_top_k", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.c_int32], ctypes.POINTER(struct_ggml_tensor), enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_top_k", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.c_int32], ctypes.POINTER(struct_ggml_tensor))
 def ggml_top_k(ctx: ctypes._Pointer[struct_ggml_context], a: ctypes._Pointer[struct_ggml_tensor], k: ctypes.c_int32) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_flash_attn_ext", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor), ctypes.c_float, ctypes.c_float, ctypes.c_float], ctypes.POINTER(struct_ggml_tensor), enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_flash_attn_ext", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor), ctypes.c_float, ctypes.c_float, ctypes.c_float], ctypes.POINTER(struct_ggml_tensor))
 def ggml_flash_attn_ext(ctx: ctypes._Pointer[struct_ggml_context], q: ctypes._Pointer[struct_ggml_tensor], k: ctypes._Pointer[struct_ggml_tensor], v: ctypes._Pointer[struct_ggml_tensor], mask: ctypes._Pointer[struct_ggml_tensor], scale: ctypes.c_float, max_bias: ctypes.c_float, logit_softcap: ctypes.c_float) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_flash_attn_ext_set_prec", [ctypes.POINTER(struct_ggml_tensor), ggml_prec], None, enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_flash_attn_ext_set_prec", [ctypes.POINTER(struct_ggml_tensor), ggml_prec], None)
 def ggml_flash_attn_ext_set_prec(a: ctypes._Pointer[struct_ggml_tensor], prec: ggml_prec) -> None:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_flash_attn_ext_get_prec", [ctypes.POINTER(struct_ggml_tensor)], ggml_prec, enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_flash_attn_ext_get_prec", [ctypes.POINTER(struct_ggml_tensor)], ggml_prec)
 def ggml_flash_attn_ext_get_prec(a: ctypes._Pointer[struct_ggml_tensor]) -> ggml_prec:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_flash_attn_back", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor), ctypes.c_bool], ctypes.POINTER(struct_ggml_tensor), enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_flash_attn_back", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor), ctypes.c_bool], ctypes.POINTER(struct_ggml_tensor))
 def ggml_flash_attn_back(ctx: ctypes._Pointer[struct_ggml_context], q: ctypes._Pointer[struct_ggml_tensor], k: ctypes._Pointer[struct_ggml_tensor], v: ctypes._Pointer[struct_ggml_tensor], d: ctypes._Pointer[struct_ggml_tensor], masked: ctypes.c_bool) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_ssm_conv", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor)], ctypes.POINTER(struct_ggml_tensor), enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_ssm_conv", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor)], ctypes.POINTER(struct_ggml_tensor))
 def ggml_ssm_conv(ctx: ctypes._Pointer[struct_ggml_context], sx: ctypes._Pointer[struct_ggml_tensor], c: ctypes._Pointer[struct_ggml_tensor]) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_ssm_scan", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor)], ctypes.POINTER(struct_ggml_tensor), enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_ssm_scan", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor)], ctypes.POINTER(struct_ggml_tensor))
 def ggml_ssm_scan(ctx: ctypes._Pointer[struct_ggml_context], s: ctypes._Pointer[struct_ggml_tensor], x: ctypes._Pointer[struct_ggml_tensor], dt: ctypes._Pointer[struct_ggml_tensor], A: ctypes._Pointer[struct_ggml_tensor], B: ctypes._Pointer[struct_ggml_tensor], C: ctypes._Pointer[struct_ggml_tensor]) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_win_part", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.c_int32], ctypes.POINTER(struct_ggml_tensor), enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_win_part", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.c_int32], ctypes.POINTER(struct_ggml_tensor))
 def ggml_win_part(ctx: ctypes._Pointer[struct_ggml_context], a: ctypes._Pointer[struct_ggml_tensor], w: ctypes.c_int32) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_win_unpart", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.c_int32, ctypes.c_int32, ctypes.c_int32], ctypes.POINTER(struct_ggml_tensor), enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_win_unpart", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.c_int32, ctypes.c_int32, ctypes.c_int32], ctypes.POINTER(struct_ggml_tensor))
 def ggml_win_unpart(ctx: ctypes._Pointer[struct_ggml_context], a: ctypes._Pointer[struct_ggml_tensor], w0: ctypes.c_int32, h0: ctypes.c_int32, w: ctypes.c_int32) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_unary", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ggml_unary_op], ctypes.POINTER(struct_ggml_tensor), enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_unary", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ggml_unary_op], ctypes.POINTER(struct_ggml_tensor))
 def ggml_unary(ctx: ctypes._Pointer[struct_ggml_context], a: ctypes._Pointer[struct_ggml_tensor], op: ggml_unary_op) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_unary_inplace", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ggml_unary_op], ctypes.POINTER(struct_ggml_tensor), enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_unary_inplace", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ggml_unary_op], ctypes.POINTER(struct_ggml_tensor))
 def ggml_unary_inplace(ctx: ctypes._Pointer[struct_ggml_context], a: ctypes._Pointer[struct_ggml_tensor], op: ggml_unary_op) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_get_rel_pos", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.c_int32, ctypes.c_int32], ctypes.POINTER(struct_ggml_tensor), enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_get_rel_pos", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.c_int32, ctypes.c_int32], ctypes.POINTER(struct_ggml_tensor))
 def ggml_get_rel_pos(ctx: ctypes._Pointer[struct_ggml_context], a: ctypes._Pointer[struct_ggml_tensor], qh: ctypes.c_int32, kh: ctypes.c_int32) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_add_rel_pos", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor)], ctypes.POINTER(struct_ggml_tensor), enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_add_rel_pos", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor)], ctypes.POINTER(struct_ggml_tensor))
 def ggml_add_rel_pos(ctx: ctypes._Pointer[struct_ggml_context], a: ctypes._Pointer[struct_ggml_tensor], pw: ctypes._Pointer[struct_ggml_tensor], ph: ctypes._Pointer[struct_ggml_tensor]) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_add_rel_pos_inplace", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor)], ctypes.POINTER(struct_ggml_tensor), enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_add_rel_pos_inplace", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor)], ctypes.POINTER(struct_ggml_tensor))
 def ggml_add_rel_pos_inplace(ctx: ctypes._Pointer[struct_ggml_context], a: ctypes._Pointer[struct_ggml_tensor], pw: ctypes._Pointer[struct_ggml_tensor], ph: ctypes._Pointer[struct_ggml_tensor]) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_rwkv_wkv6", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor)], ctypes.POINTER(struct_ggml_tensor), enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_rwkv_wkv6", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor)], ctypes.POINTER(struct_ggml_tensor))
 def ggml_rwkv_wkv6(ctx: ctypes._Pointer[struct_ggml_context], k: ctypes._Pointer[struct_ggml_tensor], v: ctypes._Pointer[struct_ggml_tensor], r: ctypes._Pointer[struct_ggml_tensor], tf: ctypes._Pointer[struct_ggml_tensor], td: ctypes._Pointer[struct_ggml_tensor], state: ctypes._Pointer[struct_ggml_tensor]) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_gated_linear_attn", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor), ctypes.c_float], ctypes.POINTER(struct_ggml_tensor), enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_gated_linear_attn", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor), ctypes.c_float], ctypes.POINTER(struct_ggml_tensor))
 def ggml_gated_linear_attn(ctx: ctypes._Pointer[struct_ggml_context], k: ctypes._Pointer[struct_ggml_tensor], v: ctypes._Pointer[struct_ggml_tensor], q: ctypes._Pointer[struct_ggml_tensor], g: ctypes._Pointer[struct_ggml_tensor], state: ctypes._Pointer[struct_ggml_tensor], scale: ctypes.c_float) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_rwkv_wkv7", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor)], ctypes.POINTER(struct_ggml_tensor), enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_rwkv_wkv7", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor)], ctypes.POINTER(struct_ggml_tensor))
 def ggml_rwkv_wkv7(ctx: ctypes._Pointer[struct_ggml_context], r: ctypes._Pointer[struct_ggml_tensor], w: ctypes._Pointer[struct_ggml_tensor], k: ctypes._Pointer[struct_ggml_tensor], v: ctypes._Pointer[struct_ggml_tensor], a: ctypes._Pointer[struct_ggml_tensor], b: ctypes._Pointer[struct_ggml_tensor], state: ctypes._Pointer[struct_ggml_tensor]) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
 
 ggml_custom1_op_t = ctypes.CFUNCTYPE(None, ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor), ctypes.c_int32, ctypes.c_int32, ctypes.POINTER(None))
 ggml_custom2_op_t = ctypes.CFUNCTYPE(None, ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor), ctypes.c_int32, ctypes.c_int32, ctypes.POINTER(None))
 ggml_custom3_op_t = ctypes.CFUNCTYPE(None, ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor), ctypes.c_int32, ctypes.c_int32, ctypes.POINTER(None))
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_map_custom1", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ggml_custom1_op_t, ctypes.c_int32, ctypes.POINTER(None)], ctypes.POINTER(struct_ggml_tensor), enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_map_custom1", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ggml_custom1_op_t, ctypes.c_int32, ctypes.POINTER(None)], ctypes.POINTER(struct_ggml_tensor))
 def ggml_map_custom1(ctx: ctypes._Pointer[struct_ggml_context], a: ctypes._Pointer[struct_ggml_tensor], fun: ggml_custom1_op_t, n_tasks: ctypes.c_int32, userdata: ctypes.c_void_p) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_map_custom1_inplace", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ggml_custom1_op_t, ctypes.c_int32, ctypes.POINTER(None)], ctypes.POINTER(struct_ggml_tensor), enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_map_custom1_inplace", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ggml_custom1_op_t, ctypes.c_int32, ctypes.POINTER(None)], ctypes.POINTER(struct_ggml_tensor))
 def ggml_map_custom1_inplace(ctx: ctypes._Pointer[struct_ggml_context], a: ctypes._Pointer[struct_ggml_tensor], fun: ggml_custom1_op_t, n_tasks: ctypes.c_int32, userdata: ctypes.c_void_p) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_map_custom2", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor), ggml_custom2_op_t, ctypes.c_int32, ctypes.POINTER(None)], ctypes.POINTER(struct_ggml_tensor), enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_map_custom2", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor), ggml_custom2_op_t, ctypes.c_int32, ctypes.POINTER(None)], ctypes.POINTER(struct_ggml_tensor))
 def ggml_map_custom2(ctx: ctypes._Pointer[struct_ggml_context], a: ctypes._Pointer[struct_ggml_tensor], b: ctypes._Pointer[struct_ggml_tensor], fun: ggml_custom2_op_t, n_tasks: ctypes.c_int32, userdata: ctypes.c_void_p) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_map_custom2_inplace", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor), ggml_custom2_op_t, ctypes.c_int32, ctypes.POINTER(None)], ctypes.POINTER(struct_ggml_tensor), enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_map_custom2_inplace", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor), ggml_custom2_op_t, ctypes.c_int32, ctypes.POINTER(None)], ctypes.POINTER(struct_ggml_tensor))
 def ggml_map_custom2_inplace(ctx: ctypes._Pointer[struct_ggml_context], a: ctypes._Pointer[struct_ggml_tensor], b: ctypes._Pointer[struct_ggml_tensor], fun: ggml_custom2_op_t, n_tasks: ctypes.c_int32, userdata: ctypes.c_void_p) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_map_custom3", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor), ggml_custom3_op_t, ctypes.c_int32, ctypes.POINTER(None)], ctypes.POINTER(struct_ggml_tensor), enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_map_custom3", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor), ggml_custom3_op_t, ctypes.c_int32, ctypes.POINTER(None)], ctypes.POINTER(struct_ggml_tensor))
 def ggml_map_custom3(ctx: ctypes._Pointer[struct_ggml_context], a: ctypes._Pointer[struct_ggml_tensor], b: ctypes._Pointer[struct_ggml_tensor], c: ctypes._Pointer[struct_ggml_tensor], fun: ggml_custom3_op_t, n_tasks: ctypes.c_int32, userdata: ctypes.c_void_p) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_map_custom3_inplace", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor), ggml_custom3_op_t, ctypes.c_int32, ctypes.POINTER(None)], ctypes.POINTER(struct_ggml_tensor), enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_map_custom3_inplace", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor), ggml_custom3_op_t, ctypes.c_int32, ctypes.POINTER(None)], ctypes.POINTER(struct_ggml_tensor))
 def ggml_map_custom3_inplace(ctx: ctypes._Pointer[struct_ggml_context], a: ctypes._Pointer[struct_ggml_tensor], b: ctypes._Pointer[struct_ggml_tensor], c: ctypes._Pointer[struct_ggml_tensor], fun: ggml_custom3_op_t, n_tasks: ctypes.c_int32, userdata: ctypes.c_void_p) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
 
 ggml_custom_op_t = ctypes.CFUNCTYPE(None, ctypes.POINTER(struct_ggml_tensor), ctypes.c_int32, ctypes.c_int32, ctypes.POINTER(None))
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_custom_4d", [ctypes.POINTER(struct_ggml_context), ggml_type, int64_t, int64_t, int64_t, int64_t, ctypes.POINTER(ctypes.POINTER(struct_ggml_tensor)), ctypes.c_int32, ggml_custom_op_t, ctypes.c_int32, ctypes.POINTER(None)], ctypes.POINTER(struct_ggml_tensor), enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_custom_4d", [ctypes.POINTER(struct_ggml_context), ggml_type, int64_t, int64_t, int64_t, int64_t, ctypes.POINTER(ctypes.POINTER(struct_ggml_tensor)), ctypes.c_int32, ggml_custom_op_t, ctypes.c_int32, ctypes.POINTER(None)], ctypes.POINTER(struct_ggml_tensor))
 def ggml_custom_4d(ctx: ctypes._Pointer[struct_ggml_context], type: ggml_type, ne0: int64_t, ne1: int64_t, ne2: int64_t, ne3: int64_t, args: ctypes._Pointer[ctypes._Pointer[struct_ggml_tensor]], n_args: ctypes.c_int32, fun: ggml_custom_op_t, n_tasks: ctypes.c_int32, userdata: ctypes.c_void_p) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_custom_inplace", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(ctypes.POINTER(struct_ggml_tensor)), ctypes.c_int32, ggml_custom_op_t, ctypes.c_int32, ctypes.POINTER(None)], ctypes.POINTER(struct_ggml_tensor), enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_custom_inplace", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(ctypes.POINTER(struct_ggml_tensor)), ctypes.c_int32, ggml_custom_op_t, ctypes.c_int32, ctypes.POINTER(None)], ctypes.POINTER(struct_ggml_tensor))
 def ggml_custom_inplace(ctx: ctypes._Pointer[struct_ggml_context], a: ctypes._Pointer[struct_ggml_tensor], args: ctypes._Pointer[ctypes._Pointer[struct_ggml_tensor]], n_args: ctypes.c_int32, fun: ggml_custom_op_t, n_tasks: ctypes.c_int32, userdata: ctypes.c_void_p) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_cross_entropy_loss", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor)], ctypes.POINTER(struct_ggml_tensor), enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_cross_entropy_loss", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor)], ctypes.POINTER(struct_ggml_tensor))
 def ggml_cross_entropy_loss(ctx: ctypes._Pointer[struct_ggml_context], a: ctypes._Pointer[struct_ggml_tensor], b: ctypes._Pointer[struct_ggml_tensor]) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_cross_entropy_loss_back", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor)], ctypes.POINTER(struct_ggml_tensor), enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_cross_entropy_loss_back", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor)], ctypes.POINTER(struct_ggml_tensor))
 def ggml_cross_entropy_loss_back(ctx: ctypes._Pointer[struct_ggml_context], a: ctypes._Pointer[struct_ggml_tensor], b: ctypes._Pointer[struct_ggml_tensor], c: ctypes._Pointer[struct_ggml_tensor]) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_opt_step_adamw", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor)], ctypes.POINTER(struct_ggml_tensor), enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_opt_step_adamw", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor)], ctypes.POINTER(struct_ggml_tensor))
 def ggml_opt_step_adamw(ctx: ctypes._Pointer[struct_ggml_context], a: ctypes._Pointer[struct_ggml_tensor], grad: ctypes._Pointer[struct_ggml_tensor], m: ctypes._Pointer[struct_ggml_tensor], v: ctypes._Pointer[struct_ggml_tensor], adamw_params: ctypes._Pointer[struct_ggml_tensor]) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
 
@@ -1877,116 +1878,116 @@ class struct_ggml_cgraph(Structure):
         leafs: ctypes._Pointer[ctypes._Pointer[struct_ggml_tensor]]
         visited_hash_set: struct_ggml_hash_set
         order: ggml_cgraph_eval_order
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_build_forward_expand", [ctypes.POINTER(struct_ggml_cgraph), ctypes.POINTER(struct_ggml_tensor)], None, enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_build_forward_expand", [ctypes.POINTER(struct_ggml_cgraph), ctypes.POINTER(struct_ggml_tensor)], None)
 def ggml_build_forward_expand(cgraph: ctypes._Pointer[struct_ggml_cgraph], tensor: ctypes._Pointer[struct_ggml_tensor]) -> None:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_build_backward_expand", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_cgraph), ctypes.POINTER(ctypes.POINTER(struct_ggml_tensor))], None, enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_build_backward_expand", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_cgraph), ctypes.POINTER(ctypes.POINTER(struct_ggml_tensor))], None)
 def ggml_build_backward_expand(ctx: ctypes._Pointer[struct_ggml_context], cgraph: ctypes._Pointer[struct_ggml_cgraph], grad_accs: ctypes._Pointer[ctypes._Pointer[struct_ggml_tensor]]) -> None:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_new_graph", [ctypes.POINTER(struct_ggml_context)], ctypes.POINTER(struct_ggml_cgraph), enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_new_graph", [ctypes.POINTER(struct_ggml_context)], ctypes.POINTER(struct_ggml_cgraph))
 def ggml_new_graph(ctx: ctypes._Pointer[struct_ggml_context]) -> ctypes._Pointer[struct_ggml_cgraph]:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_new_graph_custom", [ctypes.POINTER(struct_ggml_context), size_t, ctypes.c_bool], ctypes.POINTER(struct_ggml_cgraph), enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_new_graph_custom", [ctypes.POINTER(struct_ggml_context), size_t, ctypes.c_bool], ctypes.POINTER(struct_ggml_cgraph))
 def ggml_new_graph_custom(ctx: ctypes._Pointer[struct_ggml_context], size: size_t, grads: ctypes.c_bool) -> ctypes._Pointer[struct_ggml_cgraph]:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_graph_dup", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_cgraph), ctypes.c_bool], ctypes.POINTER(struct_ggml_cgraph), enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_graph_dup", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_cgraph), ctypes.c_bool], ctypes.POINTER(struct_ggml_cgraph))
 def ggml_graph_dup(ctx: ctypes._Pointer[struct_ggml_context], cgraph: ctypes._Pointer[struct_ggml_cgraph], force_grads: ctypes.c_bool) -> ctypes._Pointer[struct_ggml_cgraph]:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_graph_cpy", [ctypes.POINTER(struct_ggml_cgraph), ctypes.POINTER(struct_ggml_cgraph)], None, enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_graph_cpy", [ctypes.POINTER(struct_ggml_cgraph), ctypes.POINTER(struct_ggml_cgraph)], None)
 def ggml_graph_cpy(src: ctypes._Pointer[struct_ggml_cgraph], dst: ctypes._Pointer[struct_ggml_cgraph]) -> None:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_graph_reset", [ctypes.POINTER(struct_ggml_cgraph)], None, enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_graph_reset", [ctypes.POINTER(struct_ggml_cgraph)], None)
 def ggml_graph_reset(cgraph: ctypes._Pointer[struct_ggml_cgraph]) -> None:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_graph_clear", [ctypes.POINTER(struct_ggml_cgraph)], None, enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_graph_clear", [ctypes.POINTER(struct_ggml_cgraph)], None)
 def ggml_graph_clear(cgraph: ctypes._Pointer[struct_ggml_cgraph]) -> None:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_graph_size", [ctypes.POINTER(struct_ggml_cgraph)], ctypes.c_int32, enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_graph_size", [ctypes.POINTER(struct_ggml_cgraph)], ctypes.c_int32)
 def ggml_graph_size(cgraph: ctypes._Pointer[struct_ggml_cgraph]) -> ctypes.c_int32:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_graph_node", [ctypes.POINTER(struct_ggml_cgraph), ctypes.c_int32], ctypes.POINTER(struct_ggml_tensor), enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_graph_node", [ctypes.POINTER(struct_ggml_cgraph), ctypes.c_int32], ctypes.POINTER(struct_ggml_tensor))
 def ggml_graph_node(cgraph: ctypes._Pointer[struct_ggml_cgraph], i: ctypes.c_int32) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_graph_nodes", [ctypes.POINTER(struct_ggml_cgraph)], ctypes.POINTER(ctypes.POINTER(struct_ggml_tensor)), enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_graph_nodes", [ctypes.POINTER(struct_ggml_cgraph)], ctypes.POINTER(ctypes.POINTER(struct_ggml_tensor)))
 def ggml_graph_nodes(cgraph: ctypes._Pointer[struct_ggml_cgraph]) -> ctypes._Pointer[ctypes._Pointer[struct_ggml_tensor]]:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_graph_n_nodes", [ctypes.POINTER(struct_ggml_cgraph)], ctypes.c_int32, enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_graph_n_nodes", [ctypes.POINTER(struct_ggml_cgraph)], ctypes.c_int32)
 def ggml_graph_n_nodes(cgraph: ctypes._Pointer[struct_ggml_cgraph]) -> ctypes.c_int32:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_graph_add_node", [ctypes.POINTER(struct_ggml_cgraph), ctypes.POINTER(struct_ggml_tensor)], None, enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_graph_add_node", [ctypes.POINTER(struct_ggml_cgraph), ctypes.POINTER(struct_ggml_tensor)], None)
 def ggml_graph_add_node(cgraph: ctypes._Pointer[struct_ggml_cgraph], tensor: ctypes._Pointer[struct_ggml_tensor]) -> None:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_graph_overhead", [], size_t, enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_graph_overhead", [], size_t)
 def ggml_graph_overhead() -> size_t:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_graph_overhead_custom", [size_t, ctypes.c_bool], size_t, enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_graph_overhead_custom", [size_t, ctypes.c_bool], size_t)
 def ggml_graph_overhead_custom(size: size_t, grads: ctypes.c_bool) -> size_t:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_graph_get_tensor", [ctypes.POINTER(struct_ggml_cgraph), ctypes.POINTER(ctypes.c_char)], ctypes.POINTER(struct_ggml_tensor), enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_graph_get_tensor", [ctypes.POINTER(struct_ggml_cgraph), ctypes.POINTER(ctypes.c_char)], ctypes.POINTER(struct_ggml_tensor))
 def ggml_graph_get_tensor(cgraph: ctypes._Pointer[struct_ggml_cgraph], name: ctypes._Pointer[ctypes.c_char]) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_graph_get_grad", [ctypes.POINTER(struct_ggml_cgraph), ctypes.POINTER(struct_ggml_tensor)], ctypes.POINTER(struct_ggml_tensor), enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_graph_get_grad", [ctypes.POINTER(struct_ggml_cgraph), ctypes.POINTER(struct_ggml_tensor)], ctypes.POINTER(struct_ggml_tensor))
 def ggml_graph_get_grad(cgraph: ctypes._Pointer[struct_ggml_cgraph], node: ctypes._Pointer[struct_ggml_tensor]) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_graph_get_grad_acc", [ctypes.POINTER(struct_ggml_cgraph), ctypes.POINTER(struct_ggml_tensor)], ctypes.POINTER(struct_ggml_tensor), enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_graph_get_grad_acc", [ctypes.POINTER(struct_ggml_cgraph), ctypes.POINTER(struct_ggml_tensor)], ctypes.POINTER(struct_ggml_tensor))
 def ggml_graph_get_grad_acc(cgraph: ctypes._Pointer[struct_ggml_cgraph], node: ctypes._Pointer[struct_ggml_tensor]) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
 
-@ctypes_function_for_shared_library('FIXME_STUB')("ggml_graph_export", [ctypes.POINTER(struct_ggml_cgraph), ctypes.POINTER(ctypes.c_char)], None, enabled=False)
+@ctypes_function_for_shared_library('FIXME_STUB')("ggml_graph_export", [ctypes.POINTER(struct_ggml_cgraph), ctypes.POINTER(ctypes.c_char)], None)
 def ggml_graph_export(cgraph: ctypes._Pointer[struct_ggml_cgraph], fname: ctypes._Pointer[ctypes.c_char]) -> None:
     ...
 
-@ctypes_function_for_shared_library('FIXME_STUB')("ggml_graph_import", [ctypes.POINTER(ctypes.c_char), ctypes.POINTER(ctypes.POINTER(struct_ggml_context)), ctypes.POINTER(ctypes.POINTER(struct_ggml_context))], ctypes.POINTER(struct_ggml_cgraph), enabled=False)
+@ctypes_function_for_shared_library('FIXME_STUB')("ggml_graph_import", [ctypes.POINTER(ctypes.c_char), ctypes.POINTER(ctypes.POINTER(struct_ggml_context)), ctypes.POINTER(ctypes.POINTER(struct_ggml_context))], ctypes.POINTER(struct_ggml_cgraph))
 def ggml_graph_import(fname: ctypes._Pointer[ctypes.c_char], ctx_data: ctypes._Pointer[ctypes._Pointer[struct_ggml_context]], ctx_eval: ctypes._Pointer[ctypes._Pointer[struct_ggml_context]]) -> ctypes._Pointer[struct_ggml_cgraph]:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_graph_print", [ctypes.POINTER(struct_ggml_cgraph)], None, enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_graph_print", [ctypes.POINTER(struct_ggml_cgraph)], None)
 def ggml_graph_print(cgraph: ctypes._Pointer[struct_ggml_cgraph]) -> None:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_graph_dump_dot", [ctypes.POINTER(struct_ggml_cgraph), ctypes.POINTER(struct_ggml_cgraph), ctypes.POINTER(ctypes.c_char)], None, enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_graph_dump_dot", [ctypes.POINTER(struct_ggml_cgraph), ctypes.POINTER(struct_ggml_cgraph), ctypes.POINTER(ctypes.c_char)], None)
 def ggml_graph_dump_dot(gb: ctypes._Pointer[struct_ggml_cgraph], gf: ctypes._Pointer[struct_ggml_cgraph], filename: ctypes._Pointer[ctypes.c_char]) -> None:
     ...
 
 ggml_log_callback = ctypes.CFUNCTYPE(None, ggml_log_level, ctypes.POINTER(ctypes.c_char), ctypes.POINTER(None))
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_log_set", [ggml_log_callback, ctypes.POINTER(None)], None, enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_log_set", [ggml_log_callback, ctypes.POINTER(None)], None)
 def ggml_log_set(log_callback: ggml_log_callback, user_data: ctypes.c_void_p) -> None:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_set_zero", [ctypes.POINTER(struct_ggml_tensor)], ctypes.POINTER(struct_ggml_tensor), enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_set_zero", [ctypes.POINTER(struct_ggml_tensor)], ctypes.POINTER(struct_ggml_tensor))
 def ggml_set_zero(tensor: ctypes._Pointer[struct_ggml_tensor]) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_quantize_init", [ggml_type], None, enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_quantize_init", [ggml_type], None)
 def ggml_quantize_init(type: ggml_type) -> None:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_quantize_free", [], None, enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_quantize_free", [], None)
 def ggml_quantize_free() -> None:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_quantize_requires_imatrix", [ggml_type], ctypes.c_bool, enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_quantize_requires_imatrix", [ggml_type], ctypes.c_bool)
 def ggml_quantize_requires_imatrix(type: ggml_type) -> ctypes.c_bool:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_quantize_chunk", [ggml_type, ctypes.POINTER(ctypes.c_float), ctypes.POINTER(None), int64_t, int64_t, int64_t, ctypes.POINTER(ctypes.c_float)], size_t, enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_quantize_chunk", [ggml_type, ctypes.POINTER(ctypes.c_float), ctypes.POINTER(None), int64_t, int64_t, int64_t, ctypes.POINTER(ctypes.c_float)], size_t)
 def ggml_quantize_chunk(type: ggml_type, src: ctypes._Pointer[ctypes.c_float], dst: ctypes.c_void_p, start: int64_t, nrows: int64_t, n_per_row: int64_t, imatrix: ctypes._Pointer[ctypes.c_float]) -> size_t:
     ...
 
@@ -2013,7 +2014,7 @@ struct_ggml_type_traits._fields_ = [
     ('from_float_ref', ctypes.CFUNCTYPE(None, ctypes.POINTER(ctypes.c_float), ctypes.POINTER(None), ctypes.c_int64)),
 ]
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_get_type_traits", [ggml_type], ctypes.POINTER(struct_ggml_type_traits), enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_get_type_traits", [ggml_type], ctypes.POINTER(struct_ggml_type_traits))
 def ggml_get_type_traits(type: ggml_type) -> ctypes._Pointer[struct_ggml_type_traits]:
     ...
 
@@ -2053,15 +2054,15 @@ class struct_ggml_threadpool(Structure):
     pass
 
 ggml_threadpool_t = ctypes.POINTER(struct_ggml_threadpool)
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_threadpool_params_default", [ctypes.c_int32], struct_ggml_threadpool_params, enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_threadpool_params_default", [ctypes.c_int32], struct_ggml_threadpool_params)
 def ggml_threadpool_params_default(n_threads: ctypes.c_int32) -> struct_ggml_threadpool_params:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_threadpool_params_init", [ctypes.POINTER(struct_ggml_threadpool_params), ctypes.c_int32], None, enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_threadpool_params_init", [ctypes.POINTER(struct_ggml_threadpool_params), ctypes.c_int32], None)
 def ggml_threadpool_params_init(p: ctypes._Pointer[struct_ggml_threadpool_params], n_threads: ctypes.c_int32) -> None:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_threadpool_params_match", [ctypes.POINTER(struct_ggml_threadpool_params), ctypes.POINTER(struct_ggml_threadpool_params)], ctypes.c_bool, enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_threadpool_params_match", [ctypes.POINTER(struct_ggml_threadpool_params), ctypes.POINTER(struct_ggml_threadpool_params)], ctypes.c_bool)
 def ggml_threadpool_params_match(p0: ctypes._Pointer[struct_ggml_threadpool_params], p1: ctypes._Pointer[struct_ggml_threadpool_params]) -> ctypes.c_bool:
     ...
 
@@ -2162,11 +2163,11 @@ struct_ggml_tallocr._fields_ = [
     ('offset', ctypes.c_uint64),
 ]
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_tallocr_new", [ggml_backend_buffer_t], struct_ggml_tallocr, enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_tallocr_new", [ggml_backend_buffer_t], struct_ggml_tallocr)
 def ggml_tallocr_new(buffer: ggml_backend_buffer_t) -> struct_ggml_tallocr:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_tallocr_alloc", [ctypes.POINTER(struct_ggml_tallocr), ctypes.POINTER(struct_ggml_tensor)], ggml_status, enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_tallocr_alloc", [ctypes.POINTER(struct_ggml_tallocr), ctypes.POINTER(struct_ggml_tensor)], ggml_status)
 def ggml_tallocr_alloc(talloc: ctypes._Pointer[struct_ggml_tallocr], tensor: ctypes._Pointer[struct_ggml_tensor]) -> ggml_status:
     ...
 
@@ -2174,39 +2175,39 @@ class struct_ggml_gallocr(Structure):
     pass
 
 ggml_gallocr_t = ctypes.POINTER(struct_ggml_gallocr)
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_gallocr_new", [ggml_backend_buffer_type_t], ggml_gallocr_t, enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_gallocr_new", [ggml_backend_buffer_type_t], ggml_gallocr_t)
 def ggml_gallocr_new(buft: ggml_backend_buffer_type_t) -> ggml_gallocr_t:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_gallocr_new_n", [ctypes.POINTER(ctypes.POINTER(struct_ggml_backend_buffer_type)), ctypes.c_int32], ggml_gallocr_t, enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_gallocr_new_n", [ctypes.POINTER(ctypes.POINTER(struct_ggml_backend_buffer_type)), ctypes.c_int32], ggml_gallocr_t)
 def ggml_gallocr_new_n(bufts: ctypes._Pointer[ctypes._Pointer[struct_ggml_backend_buffer_type]], n_bufs: ctypes.c_int32) -> ggml_gallocr_t:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_gallocr_free", [ggml_gallocr_t], None, enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_gallocr_free", [ggml_gallocr_t], None)
 def ggml_gallocr_free(galloc: ggml_gallocr_t) -> None:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_gallocr_reserve", [ggml_gallocr_t, ctypes.POINTER(struct_ggml_cgraph)], ctypes.c_bool, enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_gallocr_reserve", [ggml_gallocr_t, ctypes.POINTER(struct_ggml_cgraph)], ctypes.c_bool)
 def ggml_gallocr_reserve(galloc: ggml_gallocr_t, graph: ctypes._Pointer[struct_ggml_cgraph]) -> ctypes.c_bool:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_gallocr_reserve_n", [ggml_gallocr_t, ctypes.POINTER(struct_ggml_cgraph), ctypes.POINTER(ctypes.c_int32), ctypes.POINTER(ctypes.c_int32)], ctypes.c_bool, enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_gallocr_reserve_n", [ggml_gallocr_t, ctypes.POINTER(struct_ggml_cgraph), ctypes.POINTER(ctypes.c_int32), ctypes.POINTER(ctypes.c_int32)], ctypes.c_bool)
 def ggml_gallocr_reserve_n(galloc: ggml_gallocr_t, graph: ctypes._Pointer[struct_ggml_cgraph], node_buffer_ids: ctypes._Pointer[ctypes.c_int32], leaf_buffer_ids: ctypes._Pointer[ctypes.c_int32]) -> ctypes.c_bool:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_gallocr_alloc_graph", [ggml_gallocr_t, ctypes.POINTER(struct_ggml_cgraph)], ctypes.c_bool, enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_gallocr_alloc_graph", [ggml_gallocr_t, ctypes.POINTER(struct_ggml_cgraph)], ctypes.c_bool)
 def ggml_gallocr_alloc_graph(galloc: ggml_gallocr_t, graph: ctypes._Pointer[struct_ggml_cgraph]) -> ctypes.c_bool:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_gallocr_get_buffer_size", [ggml_gallocr_t, ctypes.c_int32], size_t, enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_gallocr_get_buffer_size", [ggml_gallocr_t, ctypes.c_int32], size_t)
 def ggml_gallocr_get_buffer_size(galloc: ggml_gallocr_t, buffer_id: ctypes.c_int32) -> size_t:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_backend_alloc_ctx_tensors_from_buft", [ctypes.POINTER(struct_ggml_context), ggml_backend_buffer_type_t], ctypes.POINTER(struct_ggml_backend_buffer), enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_backend_alloc_ctx_tensors_from_buft", [ctypes.POINTER(struct_ggml_context), ggml_backend_buffer_type_t], ctypes.POINTER(struct_ggml_backend_buffer))
 def ggml_backend_alloc_ctx_tensors_from_buft(ctx: ctypes._Pointer[struct_ggml_context], buft: ggml_backend_buffer_type_t) -> ctypes._Pointer[struct_ggml_backend_buffer]:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_backend_alloc_ctx_tensors", [ctypes.POINTER(struct_ggml_context), ggml_backend_t], ctypes.POINTER(struct_ggml_backend_buffer), enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_backend_alloc_ctx_tensors", [ctypes.POINTER(struct_ggml_context), ggml_backend_t], ctypes.POINTER(struct_ggml_backend_buffer))
 def ggml_backend_alloc_ctx_tensors(ctx: ctypes._Pointer[struct_ggml_context], backend: ggml_backend_t) -> ctypes._Pointer[struct_ggml_backend_buffer]:
     ...
 
@@ -2308,204 +2309,204 @@ struct_ggml_backend_device._fields_ = [
 ]
 
 ggml_backend_dev_t = ctypes.POINTER(struct_ggml_backend_device)
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_backend_buft_name", [ggml_backend_buffer_type_t], ctypes.POINTER(ctypes.c_char), enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_backend_buft_name", [ggml_backend_buffer_type_t], ctypes.POINTER(ctypes.c_char))
 def ggml_backend_buft_name(buft: ggml_backend_buffer_type_t) -> ctypes._Pointer[ctypes.c_char]:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_backend_buft_alloc_buffer", [ggml_backend_buffer_type_t, size_t], ggml_backend_buffer_t, enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_backend_buft_alloc_buffer", [ggml_backend_buffer_type_t, size_t], ggml_backend_buffer_t)
 def ggml_backend_buft_alloc_buffer(buft: ggml_backend_buffer_type_t, size: size_t) -> ggml_backend_buffer_t:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_backend_buft_get_alignment", [ggml_backend_buffer_type_t], size_t, enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_backend_buft_get_alignment", [ggml_backend_buffer_type_t], size_t)
 def ggml_backend_buft_get_alignment(buft: ggml_backend_buffer_type_t) -> size_t:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_backend_buft_get_max_size", [ggml_backend_buffer_type_t], size_t, enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_backend_buft_get_max_size", [ggml_backend_buffer_type_t], size_t)
 def ggml_backend_buft_get_max_size(buft: ggml_backend_buffer_type_t) -> size_t:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_backend_buft_get_alloc_size", [ggml_backend_buffer_type_t, ctypes.POINTER(struct_ggml_tensor)], size_t, enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_backend_buft_get_alloc_size", [ggml_backend_buffer_type_t, ctypes.POINTER(struct_ggml_tensor)], size_t)
 def ggml_backend_buft_get_alloc_size(buft: ggml_backend_buffer_type_t, tensor: ctypes._Pointer[struct_ggml_tensor]) -> size_t:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_backend_buft_is_host", [ggml_backend_buffer_type_t], ctypes.c_bool, enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_backend_buft_is_host", [ggml_backend_buffer_type_t], ctypes.c_bool)
 def ggml_backend_buft_is_host(buft: ggml_backend_buffer_type_t) -> ctypes.c_bool:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_backend_buft_get_device", [ggml_backend_buffer_type_t], ggml_backend_dev_t, enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_backend_buft_get_device", [ggml_backend_buffer_type_t], ggml_backend_dev_t)
 def ggml_backend_buft_get_device(buft: ggml_backend_buffer_type_t) -> ggml_backend_dev_t:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_backend_buffer_name", [ggml_backend_buffer_t], ctypes.POINTER(ctypes.c_char), enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_backend_buffer_name", [ggml_backend_buffer_t], ctypes.POINTER(ctypes.c_char))
 def ggml_backend_buffer_name(buffer: ggml_backend_buffer_t) -> ctypes._Pointer[ctypes.c_char]:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_backend_buffer_free", [ggml_backend_buffer_t], None, enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_backend_buffer_free", [ggml_backend_buffer_t], None)
 def ggml_backend_buffer_free(buffer: ggml_backend_buffer_t) -> None:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_backend_buffer_get_base", [ggml_backend_buffer_t], ctypes.POINTER(None), enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_backend_buffer_get_base", [ggml_backend_buffer_t], ctypes.POINTER(None))
 def ggml_backend_buffer_get_base(buffer: ggml_backend_buffer_t) -> ctypes.c_void_p:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_backend_buffer_get_size", [ggml_backend_buffer_t], size_t, enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_backend_buffer_get_size", [ggml_backend_buffer_t], size_t)
 def ggml_backend_buffer_get_size(buffer: ggml_backend_buffer_t) -> size_t:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_backend_buffer_init_tensor", [ggml_backend_buffer_t, ctypes.POINTER(struct_ggml_tensor)], ggml_status, enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_backend_buffer_init_tensor", [ggml_backend_buffer_t, ctypes.POINTER(struct_ggml_tensor)], ggml_status)
 def ggml_backend_buffer_init_tensor(buffer: ggml_backend_buffer_t, tensor: ctypes._Pointer[struct_ggml_tensor]) -> ggml_status:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_backend_buffer_get_alignment", [ggml_backend_buffer_t], size_t, enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_backend_buffer_get_alignment", [ggml_backend_buffer_t], size_t)
 def ggml_backend_buffer_get_alignment(buffer: ggml_backend_buffer_t) -> size_t:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_backend_buffer_get_max_size", [ggml_backend_buffer_t], size_t, enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_backend_buffer_get_max_size", [ggml_backend_buffer_t], size_t)
 def ggml_backend_buffer_get_max_size(buffer: ggml_backend_buffer_t) -> size_t:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_backend_buffer_get_alloc_size", [ggml_backend_buffer_t, ctypes.POINTER(struct_ggml_tensor)], size_t, enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_backend_buffer_get_alloc_size", [ggml_backend_buffer_t, ctypes.POINTER(struct_ggml_tensor)], size_t)
 def ggml_backend_buffer_get_alloc_size(buffer: ggml_backend_buffer_t, tensor: ctypes._Pointer[struct_ggml_tensor]) -> size_t:
     ...
 
 uint8_t = ctypes.c_uint8
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_backend_buffer_clear", [ggml_backend_buffer_t, uint8_t], None, enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_backend_buffer_clear", [ggml_backend_buffer_t, uint8_t], None)
 def ggml_backend_buffer_clear(buffer: ggml_backend_buffer_t, value: uint8_t) -> None:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_backend_buffer_is_host", [ggml_backend_buffer_t], ctypes.c_bool, enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_backend_buffer_is_host", [ggml_backend_buffer_t], ctypes.c_bool)
 def ggml_backend_buffer_is_host(buffer: ggml_backend_buffer_t) -> ctypes.c_bool:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_backend_buffer_set_usage", [ggml_backend_buffer_t, ggml_backend_buffer_usage], None, enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_backend_buffer_set_usage", [ggml_backend_buffer_t, ggml_backend_buffer_usage], None)
 def ggml_backend_buffer_set_usage(buffer: ggml_backend_buffer_t, usage: ggml_backend_buffer_usage) -> None:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_backend_buffer_get_usage", [ggml_backend_buffer_t], ggml_backend_buffer_usage, enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_backend_buffer_get_usage", [ggml_backend_buffer_t], ggml_backend_buffer_usage)
 def ggml_backend_buffer_get_usage(buffer: ggml_backend_buffer_t) -> ggml_backend_buffer_usage:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_backend_buffer_get_type", [ggml_backend_buffer_t], ggml_backend_buffer_type_t, enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_backend_buffer_get_type", [ggml_backend_buffer_t], ggml_backend_buffer_type_t)
 def ggml_backend_buffer_get_type(buffer: ggml_backend_buffer_t) -> ggml_backend_buffer_type_t:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_backend_buffer_reset", [ggml_backend_buffer_t], None, enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_backend_buffer_reset", [ggml_backend_buffer_t], None)
 def ggml_backend_buffer_reset(buffer: ggml_backend_buffer_t) -> None:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_backend_tensor_copy", [ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor)], None, enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_backend_tensor_copy", [ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor)], None)
 def ggml_backend_tensor_copy(src: ctypes._Pointer[struct_ggml_tensor], dst: ctypes._Pointer[struct_ggml_tensor]) -> None:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_backend_guid", [ggml_backend_t], ggml_guid_t, enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_backend_guid", [ggml_backend_t], ggml_guid_t)
 def ggml_backend_guid(backend: ggml_backend_t) -> ggml_guid_t:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_backend_name", [ggml_backend_t], ctypes.POINTER(ctypes.c_char), enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_backend_name", [ggml_backend_t], ctypes.POINTER(ctypes.c_char))
 def ggml_backend_name(backend: ggml_backend_t) -> ctypes._Pointer[ctypes.c_char]:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_backend_free", [ggml_backend_t], None, enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_backend_free", [ggml_backend_t], None)
 def ggml_backend_free(backend: ggml_backend_t) -> None:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_backend_get_default_buffer_type", [ggml_backend_t], ggml_backend_buffer_type_t, enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_backend_get_default_buffer_type", [ggml_backend_t], ggml_backend_buffer_type_t)
 def ggml_backend_get_default_buffer_type(backend: ggml_backend_t) -> ggml_backend_buffer_type_t:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_backend_alloc_buffer", [ggml_backend_t, size_t], ggml_backend_buffer_t, enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_backend_alloc_buffer", [ggml_backend_t, size_t], ggml_backend_buffer_t)
 def ggml_backend_alloc_buffer(backend: ggml_backend_t, size: size_t) -> ggml_backend_buffer_t:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_backend_get_alignment", [ggml_backend_t], size_t, enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_backend_get_alignment", [ggml_backend_t], size_t)
 def ggml_backend_get_alignment(backend: ggml_backend_t) -> size_t:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_backend_get_max_size", [ggml_backend_t], size_t, enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_backend_get_max_size", [ggml_backend_t], size_t)
 def ggml_backend_get_max_size(backend: ggml_backend_t) -> size_t:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_backend_tensor_set_async", [ggml_backend_t, ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(None), size_t, size_t], None, enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_backend_tensor_set_async", [ggml_backend_t, ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(None), size_t, size_t], None)
 def ggml_backend_tensor_set_async(backend: ggml_backend_t, tensor: ctypes._Pointer[struct_ggml_tensor], data: ctypes.c_void_p, offset: size_t, size: size_t) -> None:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_backend_tensor_get_async", [ggml_backend_t, ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(None), size_t, size_t], None, enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_backend_tensor_get_async", [ggml_backend_t, ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(None), size_t, size_t], None)
 def ggml_backend_tensor_get_async(backend: ggml_backend_t, tensor: ctypes._Pointer[struct_ggml_tensor], data: ctypes.c_void_p, offset: size_t, size: size_t) -> None:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_backend_tensor_set", [ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(None), size_t, size_t], None, enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_backend_tensor_set", [ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(None), size_t, size_t], None)
 def ggml_backend_tensor_set(tensor: ctypes._Pointer[struct_ggml_tensor], data: ctypes.c_void_p, offset: size_t, size: size_t) -> None:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_backend_tensor_get", [ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(None), size_t, size_t], None, enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_backend_tensor_get", [ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(None), size_t, size_t], None)
 def ggml_backend_tensor_get(tensor: ctypes._Pointer[struct_ggml_tensor], data: ctypes.c_void_p, offset: size_t, size: size_t) -> None:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_backend_tensor_memset", [ctypes.POINTER(struct_ggml_tensor), uint8_t, size_t, size_t], None, enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_backend_tensor_memset", [ctypes.POINTER(struct_ggml_tensor), uint8_t, size_t, size_t], None)
 def ggml_backend_tensor_memset(tensor: ctypes._Pointer[struct_ggml_tensor], value: uint8_t, offset: size_t, size: size_t) -> None:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_backend_synchronize", [ggml_backend_t], None, enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_backend_synchronize", [ggml_backend_t], None)
 def ggml_backend_synchronize(backend: ggml_backend_t) -> None:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_backend_graph_plan_create", [ggml_backend_t, ctypes.POINTER(struct_ggml_cgraph)], ggml_backend_graph_plan_t, enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_backend_graph_plan_create", [ggml_backend_t, ctypes.POINTER(struct_ggml_cgraph)], ggml_backend_graph_plan_t)
 def ggml_backend_graph_plan_create(backend: ggml_backend_t, cgraph: ctypes._Pointer[struct_ggml_cgraph]) -> ggml_backend_graph_plan_t:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_backend_graph_plan_free", [ggml_backend_t, ggml_backend_graph_plan_t], None, enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_backend_graph_plan_free", [ggml_backend_t, ggml_backend_graph_plan_t], None)
 def ggml_backend_graph_plan_free(backend: ggml_backend_t, plan: ggml_backend_graph_plan_t) -> None:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_backend_graph_plan_compute", [ggml_backend_t, ggml_backend_graph_plan_t], ggml_status, enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_backend_graph_plan_compute", [ggml_backend_t, ggml_backend_graph_plan_t], ggml_status)
 def ggml_backend_graph_plan_compute(backend: ggml_backend_t, plan: ggml_backend_graph_plan_t) -> ggml_status:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_backend_graph_compute", [ggml_backend_t, ctypes.POINTER(struct_ggml_cgraph)], ggml_status, enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_backend_graph_compute", [ggml_backend_t, ctypes.POINTER(struct_ggml_cgraph)], ggml_status)
 def ggml_backend_graph_compute(backend: ggml_backend_t, cgraph: ctypes._Pointer[struct_ggml_cgraph]) -> ggml_status:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_backend_graph_compute_async", [ggml_backend_t, ctypes.POINTER(struct_ggml_cgraph)], ggml_status, enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_backend_graph_compute_async", [ggml_backend_t, ctypes.POINTER(struct_ggml_cgraph)], ggml_status)
 def ggml_backend_graph_compute_async(backend: ggml_backend_t, cgraph: ctypes._Pointer[struct_ggml_cgraph]) -> ggml_status:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_backend_supports_op", [ggml_backend_t, ctypes.POINTER(struct_ggml_tensor)], ctypes.c_bool, enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_backend_supports_op", [ggml_backend_t, ctypes.POINTER(struct_ggml_tensor)], ctypes.c_bool)
 def ggml_backend_supports_op(backend: ggml_backend_t, op: ctypes._Pointer[struct_ggml_tensor]) -> ctypes.c_bool:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_backend_supports_buft", [ggml_backend_t, ggml_backend_buffer_type_t], ctypes.c_bool, enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_backend_supports_buft", [ggml_backend_t, ggml_backend_buffer_type_t], ctypes.c_bool)
 def ggml_backend_supports_buft(backend: ggml_backend_t, buft: ggml_backend_buffer_type_t) -> ctypes.c_bool:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_backend_offload_op", [ggml_backend_t, ctypes.POINTER(struct_ggml_tensor)], ctypes.c_bool, enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_backend_offload_op", [ggml_backend_t, ctypes.POINTER(struct_ggml_tensor)], ctypes.c_bool)
 def ggml_backend_offload_op(backend: ggml_backend_t, op: ctypes._Pointer[struct_ggml_tensor]) -> ctypes.c_bool:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_backend_tensor_copy_async", [ggml_backend_t, ggml_backend_t, ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor)], None, enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_backend_tensor_copy_async", [ggml_backend_t, ggml_backend_t, ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor)], None)
 def ggml_backend_tensor_copy_async(backend_src: ggml_backend_t, backend_dst: ggml_backend_t, src: ctypes._Pointer[struct_ggml_tensor], dst: ctypes._Pointer[struct_ggml_tensor]) -> None:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_backend_get_device", [ggml_backend_t], ggml_backend_dev_t, enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_backend_get_device", [ggml_backend_t], ggml_backend_dev_t)
 def ggml_backend_get_device(backend: ggml_backend_t) -> ggml_backend_dev_t:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_backend_event_new", [ggml_backend_dev_t], ggml_backend_event_t, enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_backend_event_new", [ggml_backend_dev_t], ggml_backend_event_t)
 def ggml_backend_event_new(device: ggml_backend_dev_t) -> ggml_backend_event_t:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_backend_event_free", [ggml_backend_event_t], None, enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_backend_event_free", [ggml_backend_event_t], None)
 def ggml_backend_event_free(event: ggml_backend_event_t) -> None:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_backend_event_record", [ggml_backend_event_t, ggml_backend_t], None, enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_backend_event_record", [ggml_backend_event_t, ggml_backend_t], None)
 def ggml_backend_event_record(event: ggml_backend_event_t, backend: ggml_backend_t) -> None:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_backend_event_synchronize", [ggml_backend_event_t], None, enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_backend_event_synchronize", [ggml_backend_event_t], None)
 def ggml_backend_event_synchronize(event: ggml_backend_event_t) -> None:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_backend_event_wait", [ggml_backend_t, ggml_backend_event_t], None, enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_backend_event_wait", [ggml_backend_t, ggml_backend_event_t], None)
 def ggml_backend_event_wait(backend: ggml_backend_t, event: ggml_backend_event_t) -> None:
     ...
 
@@ -2533,67 +2534,67 @@ struct_ggml_backend_dev_props._fields_ = [
     ('caps', struct_ggml_backend_dev_caps),
 ]
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_backend_dev_name", [ggml_backend_dev_t], ctypes.POINTER(ctypes.c_char), enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_backend_dev_name", [ggml_backend_dev_t], ctypes.POINTER(ctypes.c_char))
 def ggml_backend_dev_name(device: ggml_backend_dev_t) -> ctypes._Pointer[ctypes.c_char]:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_backend_dev_description", [ggml_backend_dev_t], ctypes.POINTER(ctypes.c_char), enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_backend_dev_description", [ggml_backend_dev_t], ctypes.POINTER(ctypes.c_char))
 def ggml_backend_dev_description(device: ggml_backend_dev_t) -> ctypes._Pointer[ctypes.c_char]:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_backend_dev_memory", [ggml_backend_dev_t, ctypes.POINTER(ctypes.c_uint64), ctypes.POINTER(ctypes.c_uint64)], None, enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_backend_dev_memory", [ggml_backend_dev_t, ctypes.POINTER(ctypes.c_uint64), ctypes.POINTER(ctypes.c_uint64)], None)
 def ggml_backend_dev_memory(device: ggml_backend_dev_t, free: ctypes._Pointer[ctypes.c_uint64], total: ctypes._Pointer[ctypes.c_uint64]) -> None:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_backend_dev_get_props", [ggml_backend_dev_t, ctypes.POINTER(struct_ggml_backend_dev_props)], None, enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_backend_dev_get_props", [ggml_backend_dev_t, ctypes.POINTER(struct_ggml_backend_dev_props)], None)
 def ggml_backend_dev_get_props(device: ggml_backend_dev_t, props: ctypes._Pointer[struct_ggml_backend_dev_props]) -> None:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_backend_dev_backend_reg", [ggml_backend_dev_t], ggml_backend_reg_t, enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_backend_dev_backend_reg", [ggml_backend_dev_t], ggml_backend_reg_t)
 def ggml_backend_dev_backend_reg(device: ggml_backend_dev_t) -> ggml_backend_reg_t:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_backend_dev_init", [ggml_backend_dev_t, ctypes.POINTER(ctypes.c_char)], ggml_backend_t, enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_backend_dev_init", [ggml_backend_dev_t, ctypes.POINTER(ctypes.c_char)], ggml_backend_t)
 def ggml_backend_dev_init(device: ggml_backend_dev_t, params: ctypes._Pointer[ctypes.c_char]) -> ggml_backend_t:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_backend_dev_buffer_type", [ggml_backend_dev_t], ggml_backend_buffer_type_t, enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_backend_dev_buffer_type", [ggml_backend_dev_t], ggml_backend_buffer_type_t)
 def ggml_backend_dev_buffer_type(device: ggml_backend_dev_t) -> ggml_backend_buffer_type_t:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_backend_dev_host_buffer_type", [ggml_backend_dev_t], ggml_backend_buffer_type_t, enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_backend_dev_host_buffer_type", [ggml_backend_dev_t], ggml_backend_buffer_type_t)
 def ggml_backend_dev_host_buffer_type(device: ggml_backend_dev_t) -> ggml_backend_buffer_type_t:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_backend_dev_buffer_from_host_ptr", [ggml_backend_dev_t, ctypes.POINTER(None), size_t, size_t], ggml_backend_buffer_t, enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_backend_dev_buffer_from_host_ptr", [ggml_backend_dev_t, ctypes.POINTER(None), size_t, size_t], ggml_backend_buffer_t)
 def ggml_backend_dev_buffer_from_host_ptr(device: ggml_backend_dev_t, ptr: ctypes.c_void_p, size: size_t, max_tensor_size: size_t) -> ggml_backend_buffer_t:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_backend_dev_supports_op", [ggml_backend_dev_t, ctypes.POINTER(struct_ggml_tensor)], ctypes.c_bool, enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_backend_dev_supports_op", [ggml_backend_dev_t, ctypes.POINTER(struct_ggml_tensor)], ctypes.c_bool)
 def ggml_backend_dev_supports_op(device: ggml_backend_dev_t, op: ctypes._Pointer[struct_ggml_tensor]) -> ctypes.c_bool:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_backend_dev_supports_buft", [ggml_backend_dev_t, ggml_backend_buffer_type_t], ctypes.c_bool, enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_backend_dev_supports_buft", [ggml_backend_dev_t, ggml_backend_buffer_type_t], ctypes.c_bool)
 def ggml_backend_dev_supports_buft(device: ggml_backend_dev_t, buft: ggml_backend_buffer_type_t) -> ctypes.c_bool:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_backend_dev_offload_op", [ggml_backend_dev_t, ctypes.POINTER(struct_ggml_tensor)], ctypes.c_bool, enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_backend_dev_offload_op", [ggml_backend_dev_t, ctypes.POINTER(struct_ggml_tensor)], ctypes.c_bool)
 def ggml_backend_dev_offload_op(device: ggml_backend_dev_t, op: ctypes._Pointer[struct_ggml_tensor]) -> ctypes.c_bool:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_backend_reg_name", [ggml_backend_reg_t], ctypes.POINTER(ctypes.c_char), enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_backend_reg_name", [ggml_backend_reg_t], ctypes.POINTER(ctypes.c_char))
 def ggml_backend_reg_name(reg: ggml_backend_reg_t) -> ctypes._Pointer[ctypes.c_char]:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_backend_reg_dev_count", [ggml_backend_reg_t], size_t, enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_backend_reg_dev_count", [ggml_backend_reg_t], size_t)
 def ggml_backend_reg_dev_count(reg: ggml_backend_reg_t) -> size_t:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_backend_reg_dev_get", [ggml_backend_reg_t, size_t], ggml_backend_dev_t, enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_backend_reg_dev_get", [ggml_backend_reg_t, size_t], ggml_backend_dev_t)
 def ggml_backend_reg_dev_get(reg: ggml_backend_reg_t, index: size_t) -> ggml_backend_dev_t:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_backend_reg_get_proc_address", [ggml_backend_reg_t, ctypes.POINTER(ctypes.c_char)], ctypes.POINTER(None), enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_backend_reg_get_proc_address", [ggml_backend_reg_t, ctypes.POINTER(ctypes.c_char)], ctypes.POINTER(None))
 def ggml_backend_reg_get_proc_address(reg: ggml_backend_reg_t, name: ctypes._Pointer[ctypes.c_char]) -> ctypes.c_void_p:
     ...
 
@@ -2612,63 +2613,63 @@ struct_ggml_backend_feature._fields_ = [
 ]
 
 ggml_backend_get_features_t = ctypes.CFUNCTYPE(ctypes.POINTER(struct_ggml_backend_feature), ctypes.POINTER(struct_ggml_backend_reg))
-@ctypes_function_for_shared_library('libggml.so')("ggml_backend_device_register", [ggml_backend_dev_t], None, enabled=True)
+@ctypes_function_for_shared_library('libggml.so')("ggml_backend_device_register", [ggml_backend_dev_t], None)
 def ggml_backend_device_register(device: ggml_backend_dev_t) -> None:
     ...
 
-@ctypes_function_for_shared_library('libggml.so')("ggml_backend_reg_count", [], size_t, enabled=True)
+@ctypes_function_for_shared_library('libggml.so')("ggml_backend_reg_count", [], size_t)
 def ggml_backend_reg_count() -> size_t:
     ...
 
-@ctypes_function_for_shared_library('libggml.so')("ggml_backend_reg_get", [size_t], ggml_backend_reg_t, enabled=True)
+@ctypes_function_for_shared_library('libggml.so')("ggml_backend_reg_get", [size_t], ggml_backend_reg_t)
 def ggml_backend_reg_get(index: size_t) -> ggml_backend_reg_t:
     ...
 
-@ctypes_function_for_shared_library('libggml.so')("ggml_backend_reg_by_name", [ctypes.POINTER(ctypes.c_char)], ggml_backend_reg_t, enabled=True)
+@ctypes_function_for_shared_library('libggml.so')("ggml_backend_reg_by_name", [ctypes.POINTER(ctypes.c_char)], ggml_backend_reg_t)
 def ggml_backend_reg_by_name(name: ctypes._Pointer[ctypes.c_char]) -> ggml_backend_reg_t:
     ...
 
-@ctypes_function_for_shared_library('libggml.so')("ggml_backend_dev_count", [], size_t, enabled=True)
+@ctypes_function_for_shared_library('libggml.so')("ggml_backend_dev_count", [], size_t)
 def ggml_backend_dev_count() -> size_t:
     ...
 
-@ctypes_function_for_shared_library('libggml.so')("ggml_backend_dev_get", [size_t], ggml_backend_dev_t, enabled=True)
+@ctypes_function_for_shared_library('libggml.so')("ggml_backend_dev_get", [size_t], ggml_backend_dev_t)
 def ggml_backend_dev_get(index: size_t) -> ggml_backend_dev_t:
     ...
 
-@ctypes_function_for_shared_library('libggml.so')("ggml_backend_dev_by_name", [ctypes.POINTER(ctypes.c_char)], ggml_backend_dev_t, enabled=True)
+@ctypes_function_for_shared_library('libggml.so')("ggml_backend_dev_by_name", [ctypes.POINTER(ctypes.c_char)], ggml_backend_dev_t)
 def ggml_backend_dev_by_name(name: ctypes._Pointer[ctypes.c_char]) -> ggml_backend_dev_t:
     ...
 
-@ctypes_function_for_shared_library('libggml.so')("ggml_backend_dev_by_type", [ggml_backend_dev_type], ggml_backend_dev_t, enabled=True)
+@ctypes_function_for_shared_library('libggml.so')("ggml_backend_dev_by_type", [ggml_backend_dev_type], ggml_backend_dev_t)
 def ggml_backend_dev_by_type(type: ggml_backend_dev_type) -> ggml_backend_dev_t:
     ...
 
-@ctypes_function_for_shared_library('libggml.so')("ggml_backend_init_by_name", [ctypes.POINTER(ctypes.c_char), ctypes.POINTER(ctypes.c_char)], ggml_backend_t, enabled=True)
+@ctypes_function_for_shared_library('libggml.so')("ggml_backend_init_by_name", [ctypes.POINTER(ctypes.c_char), ctypes.POINTER(ctypes.c_char)], ggml_backend_t)
 def ggml_backend_init_by_name(name: ctypes._Pointer[ctypes.c_char], params: ctypes._Pointer[ctypes.c_char]) -> ggml_backend_t:
     ...
 
-@ctypes_function_for_shared_library('libggml.so')("ggml_backend_init_by_type", [ggml_backend_dev_type, ctypes.POINTER(ctypes.c_char)], ggml_backend_t, enabled=True)
+@ctypes_function_for_shared_library('libggml.so')("ggml_backend_init_by_type", [ggml_backend_dev_type, ctypes.POINTER(ctypes.c_char)], ggml_backend_t)
 def ggml_backend_init_by_type(type: ggml_backend_dev_type, params: ctypes._Pointer[ctypes.c_char]) -> ggml_backend_t:
     ...
 
-@ctypes_function_for_shared_library('libggml.so')("ggml_backend_init_best", [], ggml_backend_t, enabled=True)
+@ctypes_function_for_shared_library('libggml.so')("ggml_backend_init_best", [], ggml_backend_t)
 def ggml_backend_init_best() -> ggml_backend_t:
     ...
 
-@ctypes_function_for_shared_library('libggml.so')("ggml_backend_load", [ctypes.POINTER(ctypes.c_char)], ggml_backend_reg_t, enabled=True)
+@ctypes_function_for_shared_library('libggml.so')("ggml_backend_load", [ctypes.POINTER(ctypes.c_char)], ggml_backend_reg_t)
 def ggml_backend_load(path: ctypes._Pointer[ctypes.c_char]) -> ggml_backend_reg_t:
     ...
 
-@ctypes_function_for_shared_library('libggml.so')("ggml_backend_unload", [ggml_backend_reg_t], None, enabled=True)
+@ctypes_function_for_shared_library('libggml.so')("ggml_backend_unload", [ggml_backend_reg_t], None)
 def ggml_backend_unload(reg: ggml_backend_reg_t) -> None:
     ...
 
-@ctypes_function_for_shared_library('libggml.so')("ggml_backend_load_all", [], None, enabled=True)
+@ctypes_function_for_shared_library('libggml.so')("ggml_backend_load_all", [], None)
 def ggml_backend_load_all() -> None:
     ...
 
-@ctypes_function_for_shared_library('libggml.so')("ggml_backend_load_all_from_path", [ctypes.POINTER(ctypes.c_char)], None, enabled=True)
+@ctypes_function_for_shared_library('libggml.so')("ggml_backend_load_all_from_path", [ctypes.POINTER(ctypes.c_char)], None)
 def ggml_backend_load_all_from_path(dir_path: ctypes._Pointer[ctypes.c_char]) -> None:
     ...
 
@@ -2784,67 +2785,67 @@ struct_ggml_backend_sched._fields_ = [
 
 ggml_backend_sched_t = ctypes.POINTER(struct_ggml_backend_sched)
 ggml_backend_sched_eval_callback = ctypes.CFUNCTYPE(ctypes.c_bool, ctypes.POINTER(struct_ggml_tensor), ctypes.c_bool, ctypes.POINTER(None))
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_backend_sched_new", [ctypes.POINTER(ctypes.POINTER(struct_ggml_backend)), ctypes.POINTER(ctypes.POINTER(struct_ggml_backend_buffer_type)), ctypes.c_int32, size_t, ctypes.c_bool, ctypes.c_bool], ggml_backend_sched_t, enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_backend_sched_new", [ctypes.POINTER(ctypes.POINTER(struct_ggml_backend)), ctypes.POINTER(ctypes.POINTER(struct_ggml_backend_buffer_type)), ctypes.c_int32, size_t, ctypes.c_bool, ctypes.c_bool], ggml_backend_sched_t)
 def ggml_backend_sched_new(backends: ctypes._Pointer[ctypes._Pointer[struct_ggml_backend]], bufts: ctypes._Pointer[ctypes._Pointer[struct_ggml_backend_buffer_type]], n_backends: ctypes.c_int32, graph_size: size_t, parallel: ctypes.c_bool, op_offload: ctypes.c_bool) -> ggml_backend_sched_t:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_backend_sched_free", [ggml_backend_sched_t], None, enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_backend_sched_free", [ggml_backend_sched_t], None)
 def ggml_backend_sched_free(sched: ggml_backend_sched_t) -> None:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_backend_sched_reserve", [ggml_backend_sched_t, ctypes.POINTER(struct_ggml_cgraph)], ctypes.c_bool, enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_backend_sched_reserve", [ggml_backend_sched_t, ctypes.POINTER(struct_ggml_cgraph)], ctypes.c_bool)
 def ggml_backend_sched_reserve(sched: ggml_backend_sched_t, measure_graph: ctypes._Pointer[struct_ggml_cgraph]) -> ctypes.c_bool:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_backend_sched_get_n_backends", [ggml_backend_sched_t], ctypes.c_int32, enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_backend_sched_get_n_backends", [ggml_backend_sched_t], ctypes.c_int32)
 def ggml_backend_sched_get_n_backends(sched: ggml_backend_sched_t) -> ctypes.c_int32:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_backend_sched_get_backend", [ggml_backend_sched_t, ctypes.c_int32], ggml_backend_t, enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_backend_sched_get_backend", [ggml_backend_sched_t, ctypes.c_int32], ggml_backend_t)
 def ggml_backend_sched_get_backend(sched: ggml_backend_sched_t, i: ctypes.c_int32) -> ggml_backend_t:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_backend_sched_get_n_splits", [ggml_backend_sched_t], ctypes.c_int32, enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_backend_sched_get_n_splits", [ggml_backend_sched_t], ctypes.c_int32)
 def ggml_backend_sched_get_n_splits(sched: ggml_backend_sched_t) -> ctypes.c_int32:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_backend_sched_get_n_copies", [ggml_backend_sched_t], ctypes.c_int32, enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_backend_sched_get_n_copies", [ggml_backend_sched_t], ctypes.c_int32)
 def ggml_backend_sched_get_n_copies(sched: ggml_backend_sched_t) -> ctypes.c_int32:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_backend_sched_get_buffer_size", [ggml_backend_sched_t, ggml_backend_t], size_t, enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_backend_sched_get_buffer_size", [ggml_backend_sched_t, ggml_backend_t], size_t)
 def ggml_backend_sched_get_buffer_size(sched: ggml_backend_sched_t, backend: ggml_backend_t) -> size_t:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_backend_sched_set_tensor_backend", [ggml_backend_sched_t, ctypes.POINTER(struct_ggml_tensor), ggml_backend_t], None, enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_backend_sched_set_tensor_backend", [ggml_backend_sched_t, ctypes.POINTER(struct_ggml_tensor), ggml_backend_t], None)
 def ggml_backend_sched_set_tensor_backend(sched: ggml_backend_sched_t, node: ctypes._Pointer[struct_ggml_tensor], backend: ggml_backend_t) -> None:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_backend_sched_get_tensor_backend", [ggml_backend_sched_t, ctypes.POINTER(struct_ggml_tensor)], ggml_backend_t, enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_backend_sched_get_tensor_backend", [ggml_backend_sched_t, ctypes.POINTER(struct_ggml_tensor)], ggml_backend_t)
 def ggml_backend_sched_get_tensor_backend(sched: ggml_backend_sched_t, node: ctypes._Pointer[struct_ggml_tensor]) -> ggml_backend_t:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_backend_sched_alloc_graph", [ggml_backend_sched_t, ctypes.POINTER(struct_ggml_cgraph)], ctypes.c_bool, enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_backend_sched_alloc_graph", [ggml_backend_sched_t, ctypes.POINTER(struct_ggml_cgraph)], ctypes.c_bool)
 def ggml_backend_sched_alloc_graph(sched: ggml_backend_sched_t, graph: ctypes._Pointer[struct_ggml_cgraph]) -> ctypes.c_bool:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_backend_sched_graph_compute", [ggml_backend_sched_t, ctypes.POINTER(struct_ggml_cgraph)], ggml_status, enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_backend_sched_graph_compute", [ggml_backend_sched_t, ctypes.POINTER(struct_ggml_cgraph)], ggml_status)
 def ggml_backend_sched_graph_compute(sched: ggml_backend_sched_t, graph: ctypes._Pointer[struct_ggml_cgraph]) -> ggml_status:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_backend_sched_graph_compute_async", [ggml_backend_sched_t, ctypes.POINTER(struct_ggml_cgraph)], ggml_status, enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_backend_sched_graph_compute_async", [ggml_backend_sched_t, ctypes.POINTER(struct_ggml_cgraph)], ggml_status)
 def ggml_backend_sched_graph_compute_async(sched: ggml_backend_sched_t, graph: ctypes._Pointer[struct_ggml_cgraph]) -> ggml_status:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_backend_sched_synchronize", [ggml_backend_sched_t], None, enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_backend_sched_synchronize", [ggml_backend_sched_t], None)
 def ggml_backend_sched_synchronize(sched: ggml_backend_sched_t) -> None:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_backend_sched_reset", [ggml_backend_sched_t], None, enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_backend_sched_reset", [ggml_backend_sched_t], None)
 def ggml_backend_sched_reset(sched: ggml_backend_sched_t) -> None:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_backend_sched_set_eval_callback", [ggml_backend_sched_t, ggml_backend_sched_eval_callback, ctypes.POINTER(None)], None, enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_backend_sched_set_eval_callback", [ggml_backend_sched_t, ggml_backend_sched_eval_callback, ctypes.POINTER(None)], None)
 def ggml_backend_sched_set_eval_callback(sched: ggml_backend_sched_t, callback: ggml_backend_sched_eval_callback, user_data: ctypes.c_void_p) -> None:
     ...
 
@@ -2862,32 +2863,32 @@ struct_ggml_backend_graph_copy._fields_ = [
     ('graph', ctypes.POINTER(struct_ggml_cgraph)),
 ]
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_backend_graph_copy", [ggml_backend_t, ctypes.POINTER(struct_ggml_cgraph)], struct_ggml_backend_graph_copy, enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_backend_graph_copy", [ggml_backend_t, ctypes.POINTER(struct_ggml_cgraph)], struct_ggml_backend_graph_copy)
 def ggml_backend_graph_copy(backend: ggml_backend_t, graph: ctypes._Pointer[struct_ggml_cgraph]) -> struct_ggml_backend_graph_copy:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_backend_graph_copy_free", [struct_ggml_backend_graph_copy], None, enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_backend_graph_copy_free", [struct_ggml_backend_graph_copy], None)
 def ggml_backend_graph_copy_free(copy: struct_ggml_backend_graph_copy) -> None:
     ...
 
 ggml_backend_eval_callback = ctypes.CFUNCTYPE(ctypes.c_bool, ctypes.c_int32, ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(None))
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_backend_compare_graph_backend", [ggml_backend_t, ggml_backend_t, ctypes.POINTER(struct_ggml_cgraph), ggml_backend_eval_callback, ctypes.POINTER(None)], ctypes.c_bool, enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_backend_compare_graph_backend", [ggml_backend_t, ggml_backend_t, ctypes.POINTER(struct_ggml_cgraph), ggml_backend_eval_callback, ctypes.POINTER(None)], ctypes.c_bool)
 def ggml_backend_compare_graph_backend(backend1: ggml_backend_t, backend2: ggml_backend_t, graph: ctypes._Pointer[struct_ggml_cgraph], callback: ggml_backend_eval_callback, user_data: ctypes.c_void_p) -> ctypes.c_bool:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_backend_tensor_alloc", [ggml_backend_buffer_t, ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(None)], ggml_status, enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_backend_tensor_alloc", [ggml_backend_buffer_t, ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(None)], ggml_status)
 def ggml_backend_tensor_alloc(buffer: ggml_backend_buffer_t, tensor: ctypes._Pointer[struct_ggml_tensor], addr: ctypes.c_void_p) -> ggml_status:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_backend_view_init", [ctypes.POINTER(struct_ggml_tensor)], ggml_status, enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_backend_view_init", [ctypes.POINTER(struct_ggml_tensor)], ggml_status)
 def ggml_backend_view_init(tensor: ctypes._Pointer[struct_ggml_tensor]) -> ggml_status:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_backend_cpu_buffer_from_ptr", [ctypes.POINTER(None), size_t], ggml_backend_buffer_t, enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_backend_cpu_buffer_from_ptr", [ctypes.POINTER(None), size_t], ggml_backend_buffer_t)
 def ggml_backend_cpu_buffer_from_ptr(ptr: ctypes.c_void_p, size: size_t) -> ggml_backend_buffer_t:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_backend_cpu_buffer_type", [], ggml_backend_buffer_type_t, enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_backend_cpu_buffer_type", [], ggml_backend_buffer_type_t)
 def ggml_backend_cpu_buffer_type() -> ggml_backend_buffer_type_t:
     ...
 
@@ -2927,196 +2928,196 @@ GGML_NUMA_STRATEGY_NUMACTL = 3
 GGML_NUMA_STRATEGY_MIRROR = 4
 GGML_NUMA_STRATEGY_COUNT = 5
 ggml_numa_strategy = ctypes.c_uint32 # enum
-@ctypes_function_for_shared_library('libggml-cpu.so')("ggml_numa_init", [ggml_numa_strategy], None, enabled=True)
+@ctypes_function_for_shared_library('libggml-cpu.so')("ggml_numa_init", [ggml_numa_strategy], None)
 def ggml_numa_init(numa: ggml_numa_strategy) -> None:
     ...
 
-@ctypes_function_for_shared_library('libggml-cpu.so')("ggml_is_numa", [], ctypes.c_bool, enabled=True)
+@ctypes_function_for_shared_library('libggml-cpu.so')("ggml_is_numa", [], ctypes.c_bool)
 def ggml_is_numa() -> ctypes.c_bool:
     ...
 
 int32_t = ctypes.c_int32
-@ctypes_function_for_shared_library('libggml-cpu.so')("ggml_new_i32", [ctypes.POINTER(struct_ggml_context), int32_t], ctypes.POINTER(struct_ggml_tensor), enabled=True)
+@ctypes_function_for_shared_library('libggml-cpu.so')("ggml_new_i32", [ctypes.POINTER(struct_ggml_context), int32_t], ctypes.POINTER(struct_ggml_tensor))
 def ggml_new_i32(ctx: ctypes._Pointer[struct_ggml_context], value: int32_t) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
 
-@ctypes_function_for_shared_library('libggml-cpu.so')("ggml_new_f32", [ctypes.POINTER(struct_ggml_context), ctypes.c_float], ctypes.POINTER(struct_ggml_tensor), enabled=True)
+@ctypes_function_for_shared_library('libggml-cpu.so')("ggml_new_f32", [ctypes.POINTER(struct_ggml_context), ctypes.c_float], ctypes.POINTER(struct_ggml_tensor))
 def ggml_new_f32(ctx: ctypes._Pointer[struct_ggml_context], value: ctypes.c_float) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
 
-@ctypes_function_for_shared_library('libggml-cpu.so')("ggml_set_i32", [ctypes.POINTER(struct_ggml_tensor), int32_t], ctypes.POINTER(struct_ggml_tensor), enabled=True)
+@ctypes_function_for_shared_library('libggml-cpu.so')("ggml_set_i32", [ctypes.POINTER(struct_ggml_tensor), int32_t], ctypes.POINTER(struct_ggml_tensor))
 def ggml_set_i32(tensor: ctypes._Pointer[struct_ggml_tensor], value: int32_t) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
 
-@ctypes_function_for_shared_library('libggml-cpu.so')("ggml_set_f32", [ctypes.POINTER(struct_ggml_tensor), ctypes.c_float], ctypes.POINTER(struct_ggml_tensor), enabled=True)
+@ctypes_function_for_shared_library('libggml-cpu.so')("ggml_set_f32", [ctypes.POINTER(struct_ggml_tensor), ctypes.c_float], ctypes.POINTER(struct_ggml_tensor))
 def ggml_set_f32(tensor: ctypes._Pointer[struct_ggml_tensor], value: ctypes.c_float) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
 
-@ctypes_function_for_shared_library('libggml-cpu.so')("ggml_get_i32_1d", [ctypes.POINTER(struct_ggml_tensor), ctypes.c_int32], int32_t, enabled=True)
+@ctypes_function_for_shared_library('libggml-cpu.so')("ggml_get_i32_1d", [ctypes.POINTER(struct_ggml_tensor), ctypes.c_int32], int32_t)
 def ggml_get_i32_1d(tensor: ctypes._Pointer[struct_ggml_tensor], i: ctypes.c_int32) -> int32_t:
     ...
 
-@ctypes_function_for_shared_library('libggml-cpu.so')("ggml_set_i32_1d", [ctypes.POINTER(struct_ggml_tensor), ctypes.c_int32, int32_t], None, enabled=True)
+@ctypes_function_for_shared_library('libggml-cpu.so')("ggml_set_i32_1d", [ctypes.POINTER(struct_ggml_tensor), ctypes.c_int32, int32_t], None)
 def ggml_set_i32_1d(tensor: ctypes._Pointer[struct_ggml_tensor], i: ctypes.c_int32, value: int32_t) -> None:
     ...
 
-@ctypes_function_for_shared_library('libggml-cpu.so')("ggml_get_i32_nd", [ctypes.POINTER(struct_ggml_tensor), ctypes.c_int32, ctypes.c_int32, ctypes.c_int32, ctypes.c_int32], int32_t, enabled=True)
+@ctypes_function_for_shared_library('libggml-cpu.so')("ggml_get_i32_nd", [ctypes.POINTER(struct_ggml_tensor), ctypes.c_int32, ctypes.c_int32, ctypes.c_int32, ctypes.c_int32], int32_t)
 def ggml_get_i32_nd(tensor: ctypes._Pointer[struct_ggml_tensor], i0: ctypes.c_int32, i1: ctypes.c_int32, i2: ctypes.c_int32, i3: ctypes.c_int32) -> int32_t:
     ...
 
-@ctypes_function_for_shared_library('libggml-cpu.so')("ggml_set_i32_nd", [ctypes.POINTER(struct_ggml_tensor), ctypes.c_int32, ctypes.c_int32, ctypes.c_int32, ctypes.c_int32, int32_t], None, enabled=True)
+@ctypes_function_for_shared_library('libggml-cpu.so')("ggml_set_i32_nd", [ctypes.POINTER(struct_ggml_tensor), ctypes.c_int32, ctypes.c_int32, ctypes.c_int32, ctypes.c_int32, int32_t], None)
 def ggml_set_i32_nd(tensor: ctypes._Pointer[struct_ggml_tensor], i0: ctypes.c_int32, i1: ctypes.c_int32, i2: ctypes.c_int32, i3: ctypes.c_int32, value: int32_t) -> None:
     ...
 
-@ctypes_function_for_shared_library('libggml-cpu.so')("ggml_get_f32_1d", [ctypes.POINTER(struct_ggml_tensor), ctypes.c_int32], ctypes.c_float, enabled=True)
+@ctypes_function_for_shared_library('libggml-cpu.so')("ggml_get_f32_1d", [ctypes.POINTER(struct_ggml_tensor), ctypes.c_int32], ctypes.c_float)
 def ggml_get_f32_1d(tensor: ctypes._Pointer[struct_ggml_tensor], i: ctypes.c_int32) -> ctypes.c_float:
     ...
 
-@ctypes_function_for_shared_library('libggml-cpu.so')("ggml_set_f32_1d", [ctypes.POINTER(struct_ggml_tensor), ctypes.c_int32, ctypes.c_float], None, enabled=True)
+@ctypes_function_for_shared_library('libggml-cpu.so')("ggml_set_f32_1d", [ctypes.POINTER(struct_ggml_tensor), ctypes.c_int32, ctypes.c_float], None)
 def ggml_set_f32_1d(tensor: ctypes._Pointer[struct_ggml_tensor], i: ctypes.c_int32, value: ctypes.c_float) -> None:
     ...
 
-@ctypes_function_for_shared_library('libggml-cpu.so')("ggml_get_f32_nd", [ctypes.POINTER(struct_ggml_tensor), ctypes.c_int32, ctypes.c_int32, ctypes.c_int32, ctypes.c_int32], ctypes.c_float, enabled=True)
+@ctypes_function_for_shared_library('libggml-cpu.so')("ggml_get_f32_nd", [ctypes.POINTER(struct_ggml_tensor), ctypes.c_int32, ctypes.c_int32, ctypes.c_int32, ctypes.c_int32], ctypes.c_float)
 def ggml_get_f32_nd(tensor: ctypes._Pointer[struct_ggml_tensor], i0: ctypes.c_int32, i1: ctypes.c_int32, i2: ctypes.c_int32, i3: ctypes.c_int32) -> ctypes.c_float:
     ...
 
-@ctypes_function_for_shared_library('libggml-cpu.so')("ggml_set_f32_nd", [ctypes.POINTER(struct_ggml_tensor), ctypes.c_int32, ctypes.c_int32, ctypes.c_int32, ctypes.c_int32, ctypes.c_float], None, enabled=True)
+@ctypes_function_for_shared_library('libggml-cpu.so')("ggml_set_f32_nd", [ctypes.POINTER(struct_ggml_tensor), ctypes.c_int32, ctypes.c_int32, ctypes.c_int32, ctypes.c_int32, ctypes.c_float], None)
 def ggml_set_f32_nd(tensor: ctypes._Pointer[struct_ggml_tensor], i0: ctypes.c_int32, i1: ctypes.c_int32, i2: ctypes.c_int32, i3: ctypes.c_int32, value: ctypes.c_float) -> None:
     ...
 
-@ctypes_function_for_shared_library('libggml-cpu.so')("ggml_threadpool_new", [ctypes.POINTER(struct_ggml_threadpool_params)], ctypes.POINTER(struct_ggml_threadpool), enabled=True)
+@ctypes_function_for_shared_library('libggml-cpu.so')("ggml_threadpool_new", [ctypes.POINTER(struct_ggml_threadpool_params)], ctypes.POINTER(struct_ggml_threadpool))
 def ggml_threadpool_new(params: ctypes._Pointer[struct_ggml_threadpool_params]) -> ctypes._Pointer[struct_ggml_threadpool]:
     ...
 
-@ctypes_function_for_shared_library('libggml-cpu.so')("ggml_threadpool_free", [ctypes.POINTER(struct_ggml_threadpool)], None, enabled=True)
+@ctypes_function_for_shared_library('libggml-cpu.so')("ggml_threadpool_free", [ctypes.POINTER(struct_ggml_threadpool)], None)
 def ggml_threadpool_free(threadpool: ctypes._Pointer[struct_ggml_threadpool]) -> None:
     ...
 
-@ctypes_function_for_shared_library('FIXME_STUB')("ggml_threadpool_get_n_threads", [ctypes.POINTER(struct_ggml_threadpool)], ctypes.c_int32, enabled=False)
+@ctypes_function_for_shared_library('FIXME_STUB')("ggml_threadpool_get_n_threads", [ctypes.POINTER(struct_ggml_threadpool)], ctypes.c_int32)
 def ggml_threadpool_get_n_threads(threadpool: ctypes._Pointer[struct_ggml_threadpool]) -> ctypes.c_int32:
     ...
 
-@ctypes_function_for_shared_library('libggml-cpu.so')("ggml_threadpool_pause", [ctypes.POINTER(struct_ggml_threadpool)], None, enabled=True)
+@ctypes_function_for_shared_library('libggml-cpu.so')("ggml_threadpool_pause", [ctypes.POINTER(struct_ggml_threadpool)], None)
 def ggml_threadpool_pause(threadpool: ctypes._Pointer[struct_ggml_threadpool]) -> None:
     ...
 
-@ctypes_function_for_shared_library('libggml-cpu.so')("ggml_threadpool_resume", [ctypes.POINTER(struct_ggml_threadpool)], None, enabled=True)
+@ctypes_function_for_shared_library('libggml-cpu.so')("ggml_threadpool_resume", [ctypes.POINTER(struct_ggml_threadpool)], None)
 def ggml_threadpool_resume(threadpool: ctypes._Pointer[struct_ggml_threadpool]) -> None:
     ...
 
-@ctypes_function_for_shared_library('libggml-cpu.so')("ggml_graph_plan", [ctypes.POINTER(struct_ggml_cgraph), ctypes.c_int32, ctypes.POINTER(struct_ggml_threadpool)], struct_ggml_cplan, enabled=True)
+@ctypes_function_for_shared_library('libggml-cpu.so')("ggml_graph_plan", [ctypes.POINTER(struct_ggml_cgraph), ctypes.c_int32, ctypes.POINTER(struct_ggml_threadpool)], struct_ggml_cplan)
 def ggml_graph_plan(cgraph: ctypes._Pointer[struct_ggml_cgraph], n_threads: ctypes.c_int32, threadpool: ctypes._Pointer[struct_ggml_threadpool]) -> struct_ggml_cplan:
     ...
 
-@ctypes_function_for_shared_library('libggml-cpu.so')("ggml_graph_compute", [ctypes.POINTER(struct_ggml_cgraph), ctypes.POINTER(struct_ggml_cplan)], ggml_status, enabled=True)
+@ctypes_function_for_shared_library('libggml-cpu.so')("ggml_graph_compute", [ctypes.POINTER(struct_ggml_cgraph), ctypes.POINTER(struct_ggml_cplan)], ggml_status)
 def ggml_graph_compute(cgraph: ctypes._Pointer[struct_ggml_cgraph], cplan: ctypes._Pointer[struct_ggml_cplan]) -> ggml_status:
     ...
 
-@ctypes_function_for_shared_library('libggml-cpu.so')("ggml_graph_compute_with_ctx", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_cgraph), ctypes.c_int32], ggml_status, enabled=True)
+@ctypes_function_for_shared_library('libggml-cpu.so')("ggml_graph_compute_with_ctx", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_cgraph), ctypes.c_int32], ggml_status)
 def ggml_graph_compute_with_ctx(ctx: ctypes._Pointer[struct_ggml_context], cgraph: ctypes._Pointer[struct_ggml_cgraph], n_threads: ctypes.c_int32) -> ggml_status:
     ...
 
-@ctypes_function_for_shared_library('libggml-cpu.so')("ggml_cpu_has_sse3", [], ctypes.c_int32, enabled=True)
+@ctypes_function_for_shared_library('libggml-cpu.so')("ggml_cpu_has_sse3", [], ctypes.c_int32)
 def ggml_cpu_has_sse3() -> ctypes.c_int32:
     ...
 
-@ctypes_function_for_shared_library('libggml-cpu.so')("ggml_cpu_has_ssse3", [], ctypes.c_int32, enabled=True)
+@ctypes_function_for_shared_library('libggml-cpu.so')("ggml_cpu_has_ssse3", [], ctypes.c_int32)
 def ggml_cpu_has_ssse3() -> ctypes.c_int32:
     ...
 
-@ctypes_function_for_shared_library('libggml-cpu.so')("ggml_cpu_has_avx", [], ctypes.c_int32, enabled=True)
+@ctypes_function_for_shared_library('libggml-cpu.so')("ggml_cpu_has_avx", [], ctypes.c_int32)
 def ggml_cpu_has_avx() -> ctypes.c_int32:
     ...
 
-@ctypes_function_for_shared_library('libggml-cpu.so')("ggml_cpu_has_avx_vnni", [], ctypes.c_int32, enabled=True)
+@ctypes_function_for_shared_library('libggml-cpu.so')("ggml_cpu_has_avx_vnni", [], ctypes.c_int32)
 def ggml_cpu_has_avx_vnni() -> ctypes.c_int32:
     ...
 
-@ctypes_function_for_shared_library('libggml-cpu.so')("ggml_cpu_has_avx2", [], ctypes.c_int32, enabled=True)
+@ctypes_function_for_shared_library('libggml-cpu.so')("ggml_cpu_has_avx2", [], ctypes.c_int32)
 def ggml_cpu_has_avx2() -> ctypes.c_int32:
     ...
 
-@ctypes_function_for_shared_library('libggml-cpu.so')("ggml_cpu_has_bmi2", [], ctypes.c_int32, enabled=True)
+@ctypes_function_for_shared_library('libggml-cpu.so')("ggml_cpu_has_bmi2", [], ctypes.c_int32)
 def ggml_cpu_has_bmi2() -> ctypes.c_int32:
     ...
 
-@ctypes_function_for_shared_library('libggml-cpu.so')("ggml_cpu_has_f16c", [], ctypes.c_int32, enabled=True)
+@ctypes_function_for_shared_library('libggml-cpu.so')("ggml_cpu_has_f16c", [], ctypes.c_int32)
 def ggml_cpu_has_f16c() -> ctypes.c_int32:
     ...
 
-@ctypes_function_for_shared_library('libggml-cpu.so')("ggml_cpu_has_fma", [], ctypes.c_int32, enabled=True)
+@ctypes_function_for_shared_library('libggml-cpu.so')("ggml_cpu_has_fma", [], ctypes.c_int32)
 def ggml_cpu_has_fma() -> ctypes.c_int32:
     ...
 
-@ctypes_function_for_shared_library('libggml-cpu.so')("ggml_cpu_has_avx512", [], ctypes.c_int32, enabled=True)
+@ctypes_function_for_shared_library('libggml-cpu.so')("ggml_cpu_has_avx512", [], ctypes.c_int32)
 def ggml_cpu_has_avx512() -> ctypes.c_int32:
     ...
 
-@ctypes_function_for_shared_library('libggml-cpu.so')("ggml_cpu_has_avx512_vbmi", [], ctypes.c_int32, enabled=True)
+@ctypes_function_for_shared_library('libggml-cpu.so')("ggml_cpu_has_avx512_vbmi", [], ctypes.c_int32)
 def ggml_cpu_has_avx512_vbmi() -> ctypes.c_int32:
     ...
 
-@ctypes_function_for_shared_library('libggml-cpu.so')("ggml_cpu_has_avx512_vnni", [], ctypes.c_int32, enabled=True)
+@ctypes_function_for_shared_library('libggml-cpu.so')("ggml_cpu_has_avx512_vnni", [], ctypes.c_int32)
 def ggml_cpu_has_avx512_vnni() -> ctypes.c_int32:
     ...
 
-@ctypes_function_for_shared_library('libggml-cpu.so')("ggml_cpu_has_avx512_bf16", [], ctypes.c_int32, enabled=True)
+@ctypes_function_for_shared_library('libggml-cpu.so')("ggml_cpu_has_avx512_bf16", [], ctypes.c_int32)
 def ggml_cpu_has_avx512_bf16() -> ctypes.c_int32:
     ...
 
-@ctypes_function_for_shared_library('libggml-cpu.so')("ggml_cpu_has_amx_int8", [], ctypes.c_int32, enabled=True)
+@ctypes_function_for_shared_library('libggml-cpu.so')("ggml_cpu_has_amx_int8", [], ctypes.c_int32)
 def ggml_cpu_has_amx_int8() -> ctypes.c_int32:
     ...
 
-@ctypes_function_for_shared_library('libggml-cpu.so')("ggml_cpu_has_neon", [], ctypes.c_int32, enabled=True)
+@ctypes_function_for_shared_library('libggml-cpu.so')("ggml_cpu_has_neon", [], ctypes.c_int32)
 def ggml_cpu_has_neon() -> ctypes.c_int32:
     ...
 
-@ctypes_function_for_shared_library('libggml-cpu.so')("ggml_cpu_has_arm_fma", [], ctypes.c_int32, enabled=True)
+@ctypes_function_for_shared_library('libggml-cpu.so')("ggml_cpu_has_arm_fma", [], ctypes.c_int32)
 def ggml_cpu_has_arm_fma() -> ctypes.c_int32:
     ...
 
-@ctypes_function_for_shared_library('libggml-cpu.so')("ggml_cpu_has_fp16_va", [], ctypes.c_int32, enabled=True)
+@ctypes_function_for_shared_library('libggml-cpu.so')("ggml_cpu_has_fp16_va", [], ctypes.c_int32)
 def ggml_cpu_has_fp16_va() -> ctypes.c_int32:
     ...
 
-@ctypes_function_for_shared_library('libggml-cpu.so')("ggml_cpu_has_dotprod", [], ctypes.c_int32, enabled=True)
+@ctypes_function_for_shared_library('libggml-cpu.so')("ggml_cpu_has_dotprod", [], ctypes.c_int32)
 def ggml_cpu_has_dotprod() -> ctypes.c_int32:
     ...
 
-@ctypes_function_for_shared_library('libggml-cpu.so')("ggml_cpu_has_matmul_int8", [], ctypes.c_int32, enabled=True)
+@ctypes_function_for_shared_library('libggml-cpu.so')("ggml_cpu_has_matmul_int8", [], ctypes.c_int32)
 def ggml_cpu_has_matmul_int8() -> ctypes.c_int32:
     ...
 
-@ctypes_function_for_shared_library('libggml-cpu.so')("ggml_cpu_has_sve", [], ctypes.c_int32, enabled=True)
+@ctypes_function_for_shared_library('libggml-cpu.so')("ggml_cpu_has_sve", [], ctypes.c_int32)
 def ggml_cpu_has_sve() -> ctypes.c_int32:
     ...
 
-@ctypes_function_for_shared_library('libggml-cpu.so')("ggml_cpu_get_sve_cnt", [], ctypes.c_int32, enabled=True)
+@ctypes_function_for_shared_library('libggml-cpu.so')("ggml_cpu_get_sve_cnt", [], ctypes.c_int32)
 def ggml_cpu_get_sve_cnt() -> ctypes.c_int32:
     ...
 
-@ctypes_function_for_shared_library('libggml-cpu.so')("ggml_cpu_has_sme", [], ctypes.c_int32, enabled=True)
+@ctypes_function_for_shared_library('libggml-cpu.so')("ggml_cpu_has_sme", [], ctypes.c_int32)
 def ggml_cpu_has_sme() -> ctypes.c_int32:
     ...
 
-@ctypes_function_for_shared_library('libggml-cpu.so')("ggml_cpu_has_riscv_v", [], ctypes.c_int32, enabled=True)
+@ctypes_function_for_shared_library('libggml-cpu.so')("ggml_cpu_has_riscv_v", [], ctypes.c_int32)
 def ggml_cpu_has_riscv_v() -> ctypes.c_int32:
     ...
 
-@ctypes_function_for_shared_library('libggml-cpu.so')("ggml_cpu_has_vsx", [], ctypes.c_int32, enabled=True)
+@ctypes_function_for_shared_library('libggml-cpu.so')("ggml_cpu_has_vsx", [], ctypes.c_int32)
 def ggml_cpu_has_vsx() -> ctypes.c_int32:
     ...
 
-@ctypes_function_for_shared_library('libggml-cpu.so')("ggml_cpu_has_vxe", [], ctypes.c_int32, enabled=True)
+@ctypes_function_for_shared_library('libggml-cpu.so')("ggml_cpu_has_vxe", [], ctypes.c_int32)
 def ggml_cpu_has_vxe() -> ctypes.c_int32:
     ...
 
-@ctypes_function_for_shared_library('libggml-cpu.so')("ggml_cpu_has_wasm_simd", [], ctypes.c_int32, enabled=True)
+@ctypes_function_for_shared_library('libggml-cpu.so')("ggml_cpu_has_wasm_simd", [], ctypes.c_int32)
 def ggml_cpu_has_wasm_simd() -> ctypes.c_int32:
     ...
 
-@ctypes_function_for_shared_library('libggml-cpu.so')("ggml_cpu_has_llamafile", [], ctypes.c_int32, enabled=True)
+@ctypes_function_for_shared_library('libggml-cpu.so')("ggml_cpu_has_llamafile", [], ctypes.c_int32)
 def ggml_cpu_has_llamafile() -> ctypes.c_int32:
     ...
 
@@ -3136,59 +3137,59 @@ struct_ggml_type_traits_cpu._fields_ = [
     ('nrows', ctypes.c_int64),
 ]
 
-@ctypes_function_for_shared_library('libggml-cpu.so')("ggml_get_type_traits_cpu", [ggml_type], ctypes.POINTER(struct_ggml_type_traits_cpu), enabled=True)
+@ctypes_function_for_shared_library('libggml-cpu.so')("ggml_get_type_traits_cpu", [ggml_type], ctypes.POINTER(struct_ggml_type_traits_cpu))
 def ggml_get_type_traits_cpu(type: ggml_type) -> ctypes._Pointer[struct_ggml_type_traits_cpu]:
     ...
 
-@ctypes_function_for_shared_library('libggml-cpu.so')("ggml_cpu_init", [], None, enabled=True)
+@ctypes_function_for_shared_library('libggml-cpu.so')("ggml_cpu_init", [], None)
 def ggml_cpu_init() -> None:
     ...
 
-@ctypes_function_for_shared_library('libggml-cpu.so')("ggml_backend_cpu_init", [], ggml_backend_t, enabled=True)
+@ctypes_function_for_shared_library('libggml-cpu.so')("ggml_backend_cpu_init", [], ggml_backend_t)
 def ggml_backend_cpu_init() -> ggml_backend_t:
     ...
 
-@ctypes_function_for_shared_library('libggml-cpu.so')("ggml_backend_is_cpu", [ggml_backend_t], ctypes.c_bool, enabled=True)
+@ctypes_function_for_shared_library('libggml-cpu.so')("ggml_backend_is_cpu", [ggml_backend_t], ctypes.c_bool)
 def ggml_backend_is_cpu(backend: ggml_backend_t) -> ctypes.c_bool:
     ...
 
-@ctypes_function_for_shared_library('libggml-cpu.so')("ggml_backend_cpu_set_n_threads", [ggml_backend_t, ctypes.c_int32], None, enabled=True)
+@ctypes_function_for_shared_library('libggml-cpu.so')("ggml_backend_cpu_set_n_threads", [ggml_backend_t, ctypes.c_int32], None)
 def ggml_backend_cpu_set_n_threads(backend_cpu: ggml_backend_t, n_threads: ctypes.c_int32) -> None:
     ...
 
-@ctypes_function_for_shared_library('libggml-cpu.so')("ggml_backend_cpu_set_threadpool", [ggml_backend_t, ggml_threadpool_t], None, enabled=True)
+@ctypes_function_for_shared_library('libggml-cpu.so')("ggml_backend_cpu_set_threadpool", [ggml_backend_t, ggml_threadpool_t], None)
 def ggml_backend_cpu_set_threadpool(backend_cpu: ggml_backend_t, threadpool: ggml_threadpool_t) -> None:
     ...
 
-@ctypes_function_for_shared_library('libggml-cpu.so')("ggml_backend_cpu_set_abort_callback", [ggml_backend_t, ggml_abort_callback, ctypes.POINTER(None)], None, enabled=True)
+@ctypes_function_for_shared_library('libggml-cpu.so')("ggml_backend_cpu_set_abort_callback", [ggml_backend_t, ggml_abort_callback, ctypes.POINTER(None)], None)
 def ggml_backend_cpu_set_abort_callback(backend_cpu: ggml_backend_t, abort_callback: ggml_abort_callback, abort_callback_data: ctypes.c_void_p) -> None:
     ...
 
-@ctypes_function_for_shared_library('libggml-cpu.so')("ggml_backend_cpu_reg", [], ggml_backend_reg_t, enabled=True)
+@ctypes_function_for_shared_library('libggml-cpu.so')("ggml_backend_cpu_reg", [], ggml_backend_reg_t)
 def ggml_backend_cpu_reg() -> ggml_backend_reg_t:
     ...
 
-@ctypes_function_for_shared_library('libggml-cpu.so')("ggml_cpu_fp32_to_fp16", [ctypes.POINTER(ctypes.c_float), ctypes.POINTER(ctypes.c_uint16), int64_t], None, enabled=True)
+@ctypes_function_for_shared_library('libggml-cpu.so')("ggml_cpu_fp32_to_fp16", [ctypes.POINTER(ctypes.c_float), ctypes.POINTER(ctypes.c_uint16), int64_t], None)
 def ggml_cpu_fp32_to_fp16(p1: ctypes._Pointer[ctypes.c_float], p2: ctypes._Pointer[ctypes.c_uint16], p3: int64_t) -> None:
     ...
 
-@ctypes_function_for_shared_library('libggml-cpu.so')("ggml_cpu_fp16_to_fp32", [ctypes.POINTER(ctypes.c_uint16), ctypes.POINTER(ctypes.c_float), int64_t], None, enabled=True)
+@ctypes_function_for_shared_library('libggml-cpu.so')("ggml_cpu_fp16_to_fp32", [ctypes.POINTER(ctypes.c_uint16), ctypes.POINTER(ctypes.c_float), int64_t], None)
 def ggml_cpu_fp16_to_fp32(p1: ctypes._Pointer[ctypes.c_uint16], p2: ctypes._Pointer[ctypes.c_float], p3: int64_t) -> None:
     ...
 
-@ctypes_function_for_shared_library('libggml-cpu.so')("ggml_cpu_fp32_to_bf16", [ctypes.POINTER(ctypes.c_float), ctypes.POINTER(struct_c__SA_ggml_bf16_t), int64_t], None, enabled=True)
+@ctypes_function_for_shared_library('libggml-cpu.so')("ggml_cpu_fp32_to_bf16", [ctypes.POINTER(ctypes.c_float), ctypes.POINTER(struct_c__SA_ggml_bf16_t), int64_t], None)
 def ggml_cpu_fp32_to_bf16(p1: ctypes._Pointer[ctypes.c_float], p2: ctypes._Pointer[struct_c__SA_ggml_bf16_t], p3: int64_t) -> None:
     ...
 
-@ctypes_function_for_shared_library('libggml-cpu.so')("ggml_cpu_bf16_to_fp32", [ctypes.POINTER(struct_c__SA_ggml_bf16_t), ctypes.POINTER(ctypes.c_float), int64_t], None, enabled=True)
+@ctypes_function_for_shared_library('libggml-cpu.so')("ggml_cpu_bf16_to_fp32", [ctypes.POINTER(struct_c__SA_ggml_bf16_t), ctypes.POINTER(ctypes.c_float), int64_t], None)
 def ggml_cpu_bf16_to_fp32(p1: ctypes._Pointer[struct_c__SA_ggml_bf16_t], p2: ctypes._Pointer[ctypes.c_float], p3: int64_t) -> None:
     ...
 
-@ctypes_function_for_shared_library('FIXME_STUB')("ggml_print_backtrace_symbols", [], None, enabled=False)
+@ctypes_function_for_shared_library('FIXME_STUB')("ggml_print_backtrace_symbols", [], None)
 def ggml_print_backtrace_symbols() -> None:
     ...
 
-@ctypes_function_for_shared_library('FIXME_STUB')("ggml_print_backtrace", [], None, enabled=False)
+@ctypes_function_for_shared_library('FIXME_STUB')("ggml_print_backtrace", [], None)
 def ggml_print_backtrace() -> None:
     ...
 
@@ -3217,43 +3218,43 @@ struct___va_list_tag._fields_ = [
 ]
 
 va_list = struct___va_list_tag * 1
-@ctypes_function_for_shared_library('FIXME_STUB')("ggml_log_internal_v", [ggml_log_level, ctypes.POINTER(ctypes.c_char), va_list], None, enabled=False)
+@ctypes_function_for_shared_library('FIXME_STUB')("ggml_log_internal_v", [ggml_log_level, ctypes.POINTER(ctypes.c_char), va_list], None)
 def ggml_log_internal_v(level: ggml_log_level, format: ctypes._Pointer[ctypes.c_char], args: va_list) -> None:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_log_internal", [ggml_log_level, ctypes.POINTER(ctypes.c_char)], None, enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_log_internal", [ggml_log_level, ctypes.POINTER(ctypes.c_char)], None)
 def ggml_log_internal(level: ggml_log_level, format: ctypes._Pointer[ctypes.c_char]) -> None:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_log_callback_default", [ggml_log_level, ctypes.POINTER(ctypes.c_char), ctypes.POINTER(None)], None, enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_log_callback_default", [ggml_log_level, ctypes.POINTER(ctypes.c_char), ctypes.POINTER(None)], None)
 def ggml_log_callback_default(level: ggml_log_level, text: ctypes._Pointer[ctypes.c_char], user_data: ctypes.c_void_p) -> None:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_aligned_malloc", [size_t], ctypes.POINTER(None), enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_aligned_malloc", [size_t], ctypes.POINTER(None))
 def ggml_aligned_malloc(size: size_t) -> ctypes.c_void_p:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_aligned_free", [ctypes.POINTER(None), size_t], None, enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_aligned_free", [ctypes.POINTER(None), size_t], None)
 def ggml_aligned_free(ptr: ctypes.c_void_p, size: size_t) -> None:
     ...
 
-@ctypes_function_for_shared_library('FIXME_STUB')("ggml_malloc", [size_t], ctypes.POINTER(None), enabled=False)
+@ctypes_function_for_shared_library('FIXME_STUB')("ggml_malloc", [size_t], ctypes.POINTER(None))
 def ggml_malloc(size: size_t) -> ctypes.c_void_p:
     ...
 
-@ctypes_function_for_shared_library('FIXME_STUB')("ggml_calloc", [size_t, size_t], ctypes.POINTER(None), enabled=False)
+@ctypes_function_for_shared_library('FIXME_STUB')("ggml_calloc", [size_t, size_t], ctypes.POINTER(None))
 def ggml_calloc(num: size_t, size: size_t) -> ctypes.c_void_p:
     ...
 
-@ctypes_function_for_shared_library('libggml-cpu.so')("ggml_vec_dot_f32", [ctypes.c_int32, ctypes.POINTER(ctypes.c_float), size_t, ctypes.POINTER(ctypes.c_float), size_t, ctypes.POINTER(ctypes.c_float), size_t, ctypes.c_int32], None, enabled=True)
+@ctypes_function_for_shared_library('libggml-cpu.so')("ggml_vec_dot_f32", [ctypes.c_int32, ctypes.POINTER(ctypes.c_float), size_t, ctypes.POINTER(ctypes.c_float), size_t, ctypes.POINTER(ctypes.c_float), size_t, ctypes.c_int32], None)
 def ggml_vec_dot_f32(n: ctypes.c_int32, s: ctypes._Pointer[ctypes.c_float], bs: size_t, x: ctypes._Pointer[ctypes.c_float], bx: size_t, y: ctypes._Pointer[ctypes.c_float], by: size_t, nrc: ctypes.c_int32) -> None:
     ...
 
-@ctypes_function_for_shared_library('libggml-cpu.so')("ggml_vec_dot_f16", [ctypes.c_int32, ctypes.POINTER(ctypes.c_float), size_t, ctypes.POINTER(ctypes.c_uint16), size_t, ctypes.POINTER(ctypes.c_uint16), size_t, ctypes.c_int32], None, enabled=True)
+@ctypes_function_for_shared_library('libggml-cpu.so')("ggml_vec_dot_f16", [ctypes.c_int32, ctypes.POINTER(ctypes.c_float), size_t, ctypes.POINTER(ctypes.c_uint16), size_t, ctypes.POINTER(ctypes.c_uint16), size_t, ctypes.c_int32], None)
 def ggml_vec_dot_f16(n: ctypes.c_int32, s: ctypes._Pointer[ctypes.c_float], bs: size_t, x: ctypes._Pointer[ctypes.c_uint16], bx: size_t, y: ctypes._Pointer[ctypes.c_uint16], by: size_t, nrc: ctypes.c_int32) -> None:
     ...
 
-@ctypes_function_for_shared_library('libggml-cpu.so')("ggml_vec_dot_bf16", [ctypes.c_int32, ctypes.POINTER(ctypes.c_float), size_t, ctypes.POINTER(struct_c__SA_ggml_bf16_t), size_t, ctypes.POINTER(struct_c__SA_ggml_bf16_t), size_t, ctypes.c_int32], None, enabled=True)
+@ctypes_function_for_shared_library('libggml-cpu.so')("ggml_vec_dot_bf16", [ctypes.c_int32, ctypes.POINTER(ctypes.c_float), size_t, ctypes.POINTER(struct_c__SA_ggml_bf16_t), size_t, ctypes.POINTER(struct_c__SA_ggml_bf16_t), size_t, ctypes.c_int32], None)
 def ggml_vec_dot_bf16(n: ctypes.c_int32, s: ctypes._Pointer[ctypes.c_float], bs: size_t, x: ctypes._Pointer[struct_c__SA_ggml_bf16_t], bx: size_t, y: ctypes._Pointer[struct_c__SA_ggml_bf16_t], by: size_t, nrc: ctypes.c_int32) -> None:
     ...
 
@@ -3280,199 +3281,199 @@ struct_ggml_context_container._fields_ = [
     ('context', struct_ggml_context),
 ]
 
-@ctypes_function_for_shared_library('FIXME_STUB')("ggml_is_contiguous_n", [ctypes.POINTER(struct_ggml_tensor), ctypes.c_int32], ctypes.c_bool, enabled=False)
+@ctypes_function_for_shared_library('FIXME_STUB')("ggml_is_contiguous_n", [ctypes.POINTER(struct_ggml_tensor), ctypes.c_int32], ctypes.c_bool)
 def ggml_is_contiguous_n(tensor: ctypes._Pointer[struct_ggml_tensor], n: ctypes.c_int32) -> ctypes.c_bool:
     ...
 
-@ctypes_function_for_shared_library('FIXME_STUB')("ggml_is_padded_1d", [ctypes.POINTER(struct_ggml_tensor)], ctypes.c_bool, enabled=False)
+@ctypes_function_for_shared_library('FIXME_STUB')("ggml_is_padded_1d", [ctypes.POINTER(struct_ggml_tensor)], ctypes.c_bool)
 def ggml_is_padded_1d(tensor: ctypes._Pointer[struct_ggml_tensor]) -> ctypes.c_bool:
     ...
 
-@ctypes_function_for_shared_library('FIXME_STUB')("ggml_can_repeat_rows", [ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor)], ctypes.c_bool, enabled=False)
+@ctypes_function_for_shared_library('FIXME_STUB')("ggml_can_repeat_rows", [ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor)], ctypes.c_bool)
 def ggml_can_repeat_rows(t0: ctypes._Pointer[struct_ggml_tensor], t1: ctypes._Pointer[struct_ggml_tensor]) -> ctypes.c_bool:
     ...
 
-@ctypes_function_for_shared_library('FIXME_STUB')("ggml_new_object", [ctypes.POINTER(struct_ggml_context), ggml_object_type, size_t], ctypes.POINTER(struct_ggml_object), enabled=False)
+@ctypes_function_for_shared_library('FIXME_STUB')("ggml_new_object", [ctypes.POINTER(struct_ggml_context), ggml_object_type, size_t], ctypes.POINTER(struct_ggml_object))
 def ggml_new_object(ctx: ctypes._Pointer[struct_ggml_context], type: ggml_object_type, size: size_t) -> ctypes._Pointer[struct_ggml_object]:
     ...
 
-@ctypes_function_for_shared_library('FIXME_STUB')("ggml_new_tensor_impl", [ctypes.POINTER(struct_ggml_context), ggml_type, ctypes.c_int32, ctypes.POINTER(ctypes.c_int64), ctypes.POINTER(struct_ggml_tensor), size_t], ctypes.POINTER(struct_ggml_tensor), enabled=False)
+@ctypes_function_for_shared_library('FIXME_STUB')("ggml_new_tensor_impl", [ctypes.POINTER(struct_ggml_context), ggml_type, ctypes.c_int32, ctypes.POINTER(ctypes.c_int64), ctypes.POINTER(struct_ggml_tensor), size_t], ctypes.POINTER(struct_ggml_tensor))
 def ggml_new_tensor_impl(ctx: ctypes._Pointer[struct_ggml_context], type: ggml_type, n_dims: ctypes.c_int32, ne: ctypes._Pointer[ctypes.c_int64], view_src: ctypes._Pointer[struct_ggml_tensor], view_offs: size_t) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
 
-@ctypes_function_for_shared_library('FIXME_STUB')("ggml_dup_impl", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.c_bool], ctypes.POINTER(struct_ggml_tensor), enabled=False)
+@ctypes_function_for_shared_library('FIXME_STUB')("ggml_dup_impl", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.c_bool], ctypes.POINTER(struct_ggml_tensor))
 def ggml_dup_impl(ctx: ctypes._Pointer[struct_ggml_context], a: ctypes._Pointer[struct_ggml_tensor], inplace: ctypes.c_bool) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
 
-@ctypes_function_for_shared_library('FIXME_STUB')("ggml_add_impl", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor), ctypes.c_bool], ctypes.POINTER(struct_ggml_tensor), enabled=False)
+@ctypes_function_for_shared_library('FIXME_STUB')("ggml_add_impl", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor), ctypes.c_bool], ctypes.POINTER(struct_ggml_tensor))
 def ggml_add_impl(ctx: ctypes._Pointer[struct_ggml_context], a: ctypes._Pointer[struct_ggml_tensor], b: ctypes._Pointer[struct_ggml_tensor], inplace: ctypes.c_bool) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
 
-@ctypes_function_for_shared_library('FIXME_STUB')("ggml_add_cast_impl", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor), ggml_type], ctypes.POINTER(struct_ggml_tensor), enabled=False)
+@ctypes_function_for_shared_library('FIXME_STUB')("ggml_add_cast_impl", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor), ggml_type], ctypes.POINTER(struct_ggml_tensor))
 def ggml_add_cast_impl(ctx: ctypes._Pointer[struct_ggml_context], a: ctypes._Pointer[struct_ggml_tensor], b: ctypes._Pointer[struct_ggml_tensor], type: ggml_type) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
 
-@ctypes_function_for_shared_library('FIXME_STUB')("ggml_add1_impl", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor), ctypes.c_bool], ctypes.POINTER(struct_ggml_tensor), enabled=False)
+@ctypes_function_for_shared_library('FIXME_STUB')("ggml_add1_impl", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor), ctypes.c_bool], ctypes.POINTER(struct_ggml_tensor))
 def ggml_add1_impl(ctx: ctypes._Pointer[struct_ggml_context], a: ctypes._Pointer[struct_ggml_tensor], b: ctypes._Pointer[struct_ggml_tensor], inplace: ctypes.c_bool) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
 
-@ctypes_function_for_shared_library('FIXME_STUB')("ggml_acc_impl", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor), size_t, size_t, size_t, size_t, ctypes.c_bool], ctypes.POINTER(struct_ggml_tensor), enabled=False)
+@ctypes_function_for_shared_library('FIXME_STUB')("ggml_acc_impl", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor), size_t, size_t, size_t, size_t, ctypes.c_bool], ctypes.POINTER(struct_ggml_tensor))
 def ggml_acc_impl(ctx: ctypes._Pointer[struct_ggml_context], a: ctypes._Pointer[struct_ggml_tensor], b: ctypes._Pointer[struct_ggml_tensor], nb1: size_t, nb2: size_t, nb3: size_t, offset: size_t, inplace: ctypes.c_bool) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
 
-@ctypes_function_for_shared_library('FIXME_STUB')("ggml_sub_impl", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor), ctypes.c_bool], ctypes.POINTER(struct_ggml_tensor), enabled=False)
+@ctypes_function_for_shared_library('FIXME_STUB')("ggml_sub_impl", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor), ctypes.c_bool], ctypes.POINTER(struct_ggml_tensor))
 def ggml_sub_impl(ctx: ctypes._Pointer[struct_ggml_context], a: ctypes._Pointer[struct_ggml_tensor], b: ctypes._Pointer[struct_ggml_tensor], inplace: ctypes.c_bool) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
 
-@ctypes_function_for_shared_library('FIXME_STUB')("ggml_mul_impl", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor), ctypes.c_bool], ctypes.POINTER(struct_ggml_tensor), enabled=False)
+@ctypes_function_for_shared_library('FIXME_STUB')("ggml_mul_impl", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor), ctypes.c_bool], ctypes.POINTER(struct_ggml_tensor))
 def ggml_mul_impl(ctx: ctypes._Pointer[struct_ggml_context], a: ctypes._Pointer[struct_ggml_tensor], b: ctypes._Pointer[struct_ggml_tensor], inplace: ctypes.c_bool) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
 
-@ctypes_function_for_shared_library('FIXME_STUB')("ggml_div_impl", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor), ctypes.c_bool], ctypes.POINTER(struct_ggml_tensor), enabled=False)
+@ctypes_function_for_shared_library('FIXME_STUB')("ggml_div_impl", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor), ctypes.c_bool], ctypes.POINTER(struct_ggml_tensor))
 def ggml_div_impl(ctx: ctypes._Pointer[struct_ggml_context], a: ctypes._Pointer[struct_ggml_tensor], b: ctypes._Pointer[struct_ggml_tensor], inplace: ctypes.c_bool) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
 
-@ctypes_function_for_shared_library('FIXME_STUB')("ggml_sqr_impl", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.c_bool], ctypes.POINTER(struct_ggml_tensor), enabled=False)
+@ctypes_function_for_shared_library('FIXME_STUB')("ggml_sqr_impl", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.c_bool], ctypes.POINTER(struct_ggml_tensor))
 def ggml_sqr_impl(ctx: ctypes._Pointer[struct_ggml_context], a: ctypes._Pointer[struct_ggml_tensor], inplace: ctypes.c_bool) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
 
-@ctypes_function_for_shared_library('FIXME_STUB')("ggml_sqrt_impl", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.c_bool], ctypes.POINTER(struct_ggml_tensor), enabled=False)
+@ctypes_function_for_shared_library('FIXME_STUB')("ggml_sqrt_impl", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.c_bool], ctypes.POINTER(struct_ggml_tensor))
 def ggml_sqrt_impl(ctx: ctypes._Pointer[struct_ggml_context], a: ctypes._Pointer[struct_ggml_tensor], inplace: ctypes.c_bool) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
 
-@ctypes_function_for_shared_library('FIXME_STUB')("ggml_log_impl", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.c_bool], ctypes.POINTER(struct_ggml_tensor), enabled=False)
+@ctypes_function_for_shared_library('FIXME_STUB')("ggml_log_impl", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.c_bool], ctypes.POINTER(struct_ggml_tensor))
 def ggml_log_impl(ctx: ctypes._Pointer[struct_ggml_context], a: ctypes._Pointer[struct_ggml_tensor], inplace: ctypes.c_bool) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
 
-@ctypes_function_for_shared_library('FIXME_STUB')("ggml_sin_impl", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.c_bool], ctypes.POINTER(struct_ggml_tensor), enabled=False)
+@ctypes_function_for_shared_library('FIXME_STUB')("ggml_sin_impl", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.c_bool], ctypes.POINTER(struct_ggml_tensor))
 def ggml_sin_impl(ctx: ctypes._Pointer[struct_ggml_context], a: ctypes._Pointer[struct_ggml_tensor], inplace: ctypes.c_bool) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
 
-@ctypes_function_for_shared_library('FIXME_STUB')("ggml_cos_impl", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.c_bool], ctypes.POINTER(struct_ggml_tensor), enabled=False)
+@ctypes_function_for_shared_library('FIXME_STUB')("ggml_cos_impl", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.c_bool], ctypes.POINTER(struct_ggml_tensor))
 def ggml_cos_impl(ctx: ctypes._Pointer[struct_ggml_context], a: ctypes._Pointer[struct_ggml_tensor], inplace: ctypes.c_bool) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
 
-@ctypes_function_for_shared_library('FIXME_STUB')("ggml_norm_impl", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.c_float, ctypes.c_bool], ctypes.POINTER(struct_ggml_tensor), enabled=False)
+@ctypes_function_for_shared_library('FIXME_STUB')("ggml_norm_impl", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.c_float, ctypes.c_bool], ctypes.POINTER(struct_ggml_tensor))
 def ggml_norm_impl(ctx: ctypes._Pointer[struct_ggml_context], a: ctypes._Pointer[struct_ggml_tensor], eps: ctypes.c_float, inplace: ctypes.c_bool) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
 
-@ctypes_function_for_shared_library('FIXME_STUB')("ggml_rms_norm_impl", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.c_float, ctypes.c_bool], ctypes.POINTER(struct_ggml_tensor), enabled=False)
+@ctypes_function_for_shared_library('FIXME_STUB')("ggml_rms_norm_impl", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.c_float, ctypes.c_bool], ctypes.POINTER(struct_ggml_tensor))
 def ggml_rms_norm_impl(ctx: ctypes._Pointer[struct_ggml_context], a: ctypes._Pointer[struct_ggml_tensor], eps: ctypes.c_float, inplace: ctypes.c_bool) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
 
-@ctypes_function_for_shared_library('FIXME_STUB')("ggml_group_norm_impl", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.c_int32, ctypes.c_float, ctypes.c_bool], ctypes.POINTER(struct_ggml_tensor), enabled=False)
+@ctypes_function_for_shared_library('FIXME_STUB')("ggml_group_norm_impl", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.c_int32, ctypes.c_float, ctypes.c_bool], ctypes.POINTER(struct_ggml_tensor))
 def ggml_group_norm_impl(ctx: ctypes._Pointer[struct_ggml_context], a: ctypes._Pointer[struct_ggml_tensor], n_groups: ctypes.c_int32, eps: ctypes.c_float, inplace: ctypes.c_bool) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
 
-@ctypes_function_for_shared_library('FIXME_STUB')("ggml_l2_norm_impl", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.c_float, ctypes.c_bool], ctypes.POINTER(struct_ggml_tensor), enabled=False)
+@ctypes_function_for_shared_library('FIXME_STUB')("ggml_l2_norm_impl", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.c_float, ctypes.c_bool], ctypes.POINTER(struct_ggml_tensor))
 def ggml_l2_norm_impl(ctx: ctypes._Pointer[struct_ggml_context], a: ctypes._Pointer[struct_ggml_tensor], eps: ctypes.c_float, inplace: ctypes.c_bool) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
 
-@ctypes_function_for_shared_library('FIXME_STUB')("ggml_can_mul_mat", [ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor)], ctypes.c_bool, enabled=False)
+@ctypes_function_for_shared_library('FIXME_STUB')("ggml_can_mul_mat", [ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor)], ctypes.c_bool)
 def ggml_can_mul_mat(t0: ctypes._Pointer[struct_ggml_tensor], t1: ctypes._Pointer[struct_ggml_tensor]) -> ctypes.c_bool:
     ...
 
-@ctypes_function_for_shared_library('FIXME_STUB')("ggml_can_out_prod", [ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor)], ctypes.c_bool, enabled=False)
+@ctypes_function_for_shared_library('FIXME_STUB')("ggml_can_out_prod", [ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor)], ctypes.c_bool)
 def ggml_can_out_prod(t0: ctypes._Pointer[struct_ggml_tensor], t1: ctypes._Pointer[struct_ggml_tensor]) -> ctypes.c_bool:
     ...
 
-@ctypes_function_for_shared_library('FIXME_STUB')("ggml_scale_impl", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.c_float, ctypes.c_bool], ctypes.POINTER(struct_ggml_tensor), enabled=False)
+@ctypes_function_for_shared_library('FIXME_STUB')("ggml_scale_impl", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.c_float, ctypes.c_bool], ctypes.POINTER(struct_ggml_tensor))
 def ggml_scale_impl(ctx: ctypes._Pointer[struct_ggml_context], a: ctypes._Pointer[struct_ggml_tensor], s: ctypes.c_float, inplace: ctypes.c_bool) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
 
-@ctypes_function_for_shared_library('FIXME_STUB')("ggml_set_impl", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor), size_t, size_t, size_t, size_t, ctypes.c_bool], ctypes.POINTER(struct_ggml_tensor), enabled=False)
+@ctypes_function_for_shared_library('FIXME_STUB')("ggml_set_impl", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor), size_t, size_t, size_t, size_t, ctypes.c_bool], ctypes.POINTER(struct_ggml_tensor))
 def ggml_set_impl(ctx: ctypes._Pointer[struct_ggml_context], a: ctypes._Pointer[struct_ggml_tensor], b: ctypes._Pointer[struct_ggml_tensor], nb1: size_t, nb2: size_t, nb3: size_t, offset: size_t, inplace: ctypes.c_bool) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
 
-@ctypes_function_for_shared_library('FIXME_STUB')("ggml_cpy_impl", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor)], ctypes.POINTER(struct_ggml_tensor), enabled=False)
+@ctypes_function_for_shared_library('FIXME_STUB')("ggml_cpy_impl", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor)], ctypes.POINTER(struct_ggml_tensor))
 def ggml_cpy_impl(ctx: ctypes._Pointer[struct_ggml_context], a: ctypes._Pointer[struct_ggml_tensor], b: ctypes._Pointer[struct_ggml_tensor]) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
 
-@ctypes_function_for_shared_library('FIXME_STUB')("ggml_cont_impl", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor)], ctypes.POINTER(struct_ggml_tensor), enabled=False)
+@ctypes_function_for_shared_library('FIXME_STUB')("ggml_cont_impl", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor)], ctypes.POINTER(struct_ggml_tensor))
 def ggml_cont_impl(ctx: ctypes._Pointer[struct_ggml_context], a: ctypes._Pointer[struct_ggml_tensor]) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
 
-@ctypes_function_for_shared_library('FIXME_STUB')("ggml_view_impl", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.c_int32, ctypes.POINTER(ctypes.c_int64), size_t], ctypes.POINTER(struct_ggml_tensor), enabled=False)
+@ctypes_function_for_shared_library('FIXME_STUB')("ggml_view_impl", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.c_int32, ctypes.POINTER(ctypes.c_int64), size_t], ctypes.POINTER(struct_ggml_tensor))
 def ggml_view_impl(ctx: ctypes._Pointer[struct_ggml_context], a: ctypes._Pointer[struct_ggml_tensor], n_dims: ctypes.c_int32, ne: ctypes._Pointer[ctypes.c_int64], offset: size_t) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
 
-@ctypes_function_for_shared_library('FIXME_STUB')("ggml_diag_mask_inf_impl", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.c_int32, ctypes.c_bool], ctypes.POINTER(struct_ggml_tensor), enabled=False)
+@ctypes_function_for_shared_library('FIXME_STUB')("ggml_diag_mask_inf_impl", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.c_int32, ctypes.c_bool], ctypes.POINTER(struct_ggml_tensor))
 def ggml_diag_mask_inf_impl(ctx: ctypes._Pointer[struct_ggml_context], a: ctypes._Pointer[struct_ggml_tensor], n_past: ctypes.c_int32, inplace: ctypes.c_bool) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
 
-@ctypes_function_for_shared_library('FIXME_STUB')("ggml_diag_mask_zero_impl", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.c_int32, ctypes.c_bool], ctypes.POINTER(struct_ggml_tensor), enabled=False)
+@ctypes_function_for_shared_library('FIXME_STUB')("ggml_diag_mask_zero_impl", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.c_int32, ctypes.c_bool], ctypes.POINTER(struct_ggml_tensor))
 def ggml_diag_mask_zero_impl(ctx: ctypes._Pointer[struct_ggml_context], a: ctypes._Pointer[struct_ggml_tensor], n_past: ctypes.c_int32, inplace: ctypes.c_bool) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
 
-@ctypes_function_for_shared_library('FIXME_STUB')("ggml_soft_max_impl", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor), ctypes.c_float, ctypes.c_float, ctypes.c_bool], ctypes.POINTER(struct_ggml_tensor), enabled=False)
+@ctypes_function_for_shared_library('FIXME_STUB')("ggml_soft_max_impl", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor), ctypes.c_float, ctypes.c_float, ctypes.c_bool], ctypes.POINTER(struct_ggml_tensor))
 def ggml_soft_max_impl(ctx: ctypes._Pointer[struct_ggml_context], a: ctypes._Pointer[struct_ggml_tensor], mask: ctypes._Pointer[struct_ggml_tensor], scale: ctypes.c_float, max_bias: ctypes.c_float, inplace: ctypes.c_bool) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
 
-@ctypes_function_for_shared_library('FIXME_STUB')("ggml_soft_max_ext_back_impl", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor), ctypes.c_float, ctypes.c_float, ctypes.c_bool], ctypes.POINTER(struct_ggml_tensor), enabled=False)
+@ctypes_function_for_shared_library('FIXME_STUB')("ggml_soft_max_ext_back_impl", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor), ctypes.c_float, ctypes.c_float, ctypes.c_bool], ctypes.POINTER(struct_ggml_tensor))
 def ggml_soft_max_ext_back_impl(ctx: ctypes._Pointer[struct_ggml_context], a: ctypes._Pointer[struct_ggml_tensor], b: ctypes._Pointer[struct_ggml_tensor], scale: ctypes.c_float, max_bias: ctypes.c_float, inplace: ctypes.c_bool) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
 
-@ctypes_function_for_shared_library('FIXME_STUB')("ggml_rope_impl", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor), ctypes.c_int32, ctypes.c_int32, ctypes.c_int32, ctypes.c_float, ctypes.c_float, ctypes.c_float, ctypes.c_float, ctypes.c_float, ctypes.c_float, ctypes.c_bool], ctypes.POINTER(struct_ggml_tensor), enabled=False)
+@ctypes_function_for_shared_library('FIXME_STUB')("ggml_rope_impl", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor), ctypes.c_int32, ctypes.c_int32, ctypes.c_int32, ctypes.c_float, ctypes.c_float, ctypes.c_float, ctypes.c_float, ctypes.c_float, ctypes.c_float, ctypes.c_bool], ctypes.POINTER(struct_ggml_tensor))
 def ggml_rope_impl(ctx: ctypes._Pointer[struct_ggml_context], a: ctypes._Pointer[struct_ggml_tensor], b: ctypes._Pointer[struct_ggml_tensor], c: ctypes._Pointer[struct_ggml_tensor], n_dims: ctypes.c_int32, mode: ctypes.c_int32, n_ctx_orig: ctypes.c_int32, freq_base: ctypes.c_float, freq_scale: ctypes.c_float, ext_factor: ctypes.c_float, attn_factor: ctypes.c_float, beta_fast: ctypes.c_float, beta_slow: ctypes.c_float, inplace: ctypes.c_bool) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
 
-@ctypes_function_for_shared_library('FIXME_STUB')("ggml_rope_yarn_corr_dim", [ctypes.c_int32, ctypes.c_int32, ctypes.c_float, ctypes.c_float], ctypes.c_float, enabled=False)
+@ctypes_function_for_shared_library('FIXME_STUB')("ggml_rope_yarn_corr_dim", [ctypes.c_int32, ctypes.c_int32, ctypes.c_float, ctypes.c_float], ctypes.c_float)
 def ggml_rope_yarn_corr_dim(n_dims: ctypes.c_int32, n_ctx_orig: ctypes.c_int32, n_rot: ctypes.c_float, base: ctypes.c_float) -> ctypes.c_float:
     ...
 
-@ctypes_function_for_shared_library('FIXME_STUB')("ggml_calc_conv_output_size", [int64_t, int64_t, ctypes.c_int32, ctypes.c_int32, ctypes.c_int32], int64_t, enabled=False)
+@ctypes_function_for_shared_library('FIXME_STUB')("ggml_calc_conv_output_size", [int64_t, int64_t, ctypes.c_int32, ctypes.c_int32, ctypes.c_int32], int64_t)
 def ggml_calc_conv_output_size(ins: int64_t, ks: int64_t, s: ctypes.c_int32, p: ctypes.c_int32, d: ctypes.c_int32) -> int64_t:
     ...
 
-@ctypes_function_for_shared_library('FIXME_STUB')("ggml_calc_conv_transpose_1d_output_size", [int64_t, int64_t, ctypes.c_int32, ctypes.c_int32, ctypes.c_int32], int64_t, enabled=False)
+@ctypes_function_for_shared_library('FIXME_STUB')("ggml_calc_conv_transpose_1d_output_size", [int64_t, int64_t, ctypes.c_int32, ctypes.c_int32, ctypes.c_int32], int64_t)
 def ggml_calc_conv_transpose_1d_output_size(ins: int64_t, ks: int64_t, s: ctypes.c_int32, p: ctypes.c_int32, d: ctypes.c_int32) -> int64_t:
     ...
 
-@ctypes_function_for_shared_library('FIXME_STUB')("ggml_calc_conv_transpose_output_size", [int64_t, int64_t, ctypes.c_int32, ctypes.c_int32], int64_t, enabled=False)
+@ctypes_function_for_shared_library('FIXME_STUB')("ggml_calc_conv_transpose_output_size", [int64_t, int64_t, ctypes.c_int32, ctypes.c_int32], int64_t)
 def ggml_calc_conv_transpose_output_size(ins: int64_t, ks: int64_t, s: ctypes.c_int32, p: ctypes.c_int32) -> int64_t:
     ...
 
-@ctypes_function_for_shared_library('FIXME_STUB')("ggml_calc_pool_output_size", [int64_t, ctypes.c_int32, ctypes.c_int32, ctypes.c_float], int64_t, enabled=False)
+@ctypes_function_for_shared_library('FIXME_STUB')("ggml_calc_pool_output_size", [int64_t, ctypes.c_int32, ctypes.c_int32, ctypes.c_float], int64_t)
 def ggml_calc_pool_output_size(ins: int64_t, ks: ctypes.c_int32, s: ctypes.c_int32, p: ctypes.c_float) -> int64_t:
     ...
 
-@ctypes_function_for_shared_library('FIXME_STUB')("ggml_upscale_impl", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.c_int32, ctypes.c_int32, ctypes.c_int32, ctypes.c_int32, ggml_scale_mode], ctypes.POINTER(struct_ggml_tensor), enabled=False)
+@ctypes_function_for_shared_library('FIXME_STUB')("ggml_upscale_impl", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.c_int32, ctypes.c_int32, ctypes.c_int32, ctypes.c_int32, ggml_scale_mode], ctypes.POINTER(struct_ggml_tensor))
 def ggml_upscale_impl(ctx: ctypes._Pointer[struct_ggml_context], a: ctypes._Pointer[struct_ggml_tensor], ne0: ctypes.c_int32, ne1: ctypes.c_int32, ne2: ctypes.c_int32, ne3: ctypes.c_int32, mode: ggml_scale_mode) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
 
-@ctypes_function_for_shared_library('FIXME_STUB')("ggml_add_rel_pos_impl", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor), ctypes.c_bool], ctypes.POINTER(struct_ggml_tensor), enabled=False)
+@ctypes_function_for_shared_library('FIXME_STUB')("ggml_add_rel_pos_impl", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor), ctypes.c_bool], ctypes.POINTER(struct_ggml_tensor))
 def ggml_add_rel_pos_impl(ctx: ctypes._Pointer[struct_ggml_context], a: ctypes._Pointer[struct_ggml_tensor], pw: ctypes._Pointer[struct_ggml_tensor], ph: ctypes._Pointer[struct_ggml_tensor], inplace: ctypes.c_bool) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
 
-@ctypes_function_for_shared_library('FIXME_STUB')("ggml_unary_impl", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ggml_unary_op, ctypes.c_bool], ctypes.POINTER(struct_ggml_tensor), enabled=False)
+@ctypes_function_for_shared_library('FIXME_STUB')("ggml_unary_impl", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ggml_unary_op, ctypes.c_bool], ctypes.POINTER(struct_ggml_tensor))
 def ggml_unary_impl(ctx: ctypes._Pointer[struct_ggml_context], a: ctypes._Pointer[struct_ggml_tensor], op: ggml_unary_op, inplace: ctypes.c_bool) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
 
-@ctypes_function_for_shared_library('FIXME_STUB')("ggml_map_custom1_impl", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ggml_custom1_op_t, ctypes.c_int32, ctypes.POINTER(None), ctypes.c_bool], ctypes.POINTER(struct_ggml_tensor), enabled=False)
+@ctypes_function_for_shared_library('FIXME_STUB')("ggml_map_custom1_impl", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ggml_custom1_op_t, ctypes.c_int32, ctypes.POINTER(None), ctypes.c_bool], ctypes.POINTER(struct_ggml_tensor))
 def ggml_map_custom1_impl(ctx: ctypes._Pointer[struct_ggml_context], a: ctypes._Pointer[struct_ggml_tensor], fun: ggml_custom1_op_t, n_tasks: ctypes.c_int32, userdata: ctypes.c_void_p, inplace: ctypes.c_bool) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
 
-@ctypes_function_for_shared_library('FIXME_STUB')("ggml_map_custom2_impl", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor), ggml_custom2_op_t, ctypes.c_int32, ctypes.POINTER(None), ctypes.c_bool], ctypes.POINTER(struct_ggml_tensor), enabled=False)
+@ctypes_function_for_shared_library('FIXME_STUB')("ggml_map_custom2_impl", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor), ggml_custom2_op_t, ctypes.c_int32, ctypes.POINTER(None), ctypes.c_bool], ctypes.POINTER(struct_ggml_tensor))
 def ggml_map_custom2_impl(ctx: ctypes._Pointer[struct_ggml_context], a: ctypes._Pointer[struct_ggml_tensor], b: ctypes._Pointer[struct_ggml_tensor], fun: ggml_custom2_op_t, n_tasks: ctypes.c_int32, userdata: ctypes.c_void_p, inplace: ctypes.c_bool) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
 
-@ctypes_function_for_shared_library('FIXME_STUB')("ggml_map_custom3_impl", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor), ggml_custom3_op_t, ctypes.c_int32, ctypes.POINTER(None), ctypes.c_bool], ctypes.POINTER(struct_ggml_tensor), enabled=False)
+@ctypes_function_for_shared_library('FIXME_STUB')("ggml_map_custom3_impl", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor), ggml_custom3_op_t, ctypes.c_int32, ctypes.POINTER(None), ctypes.c_bool], ctypes.POINTER(struct_ggml_tensor))
 def ggml_map_custom3_impl(ctx: ctypes._Pointer[struct_ggml_context], a: ctypes._Pointer[struct_ggml_tensor], b: ctypes._Pointer[struct_ggml_tensor], c: ctypes._Pointer[struct_ggml_tensor], fun: ggml_custom3_op_t, n_tasks: ctypes.c_int32, userdata: ctypes.c_void_p, inplace: ctypes.c_bool) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_hash_set_new", [size_t], struct_ggml_hash_set, enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_hash_set_new", [size_t], struct_ggml_hash_set)
 def ggml_hash_set_new(size: size_t) -> struct_ggml_hash_set:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_hash_set_reset", [ctypes.POINTER(struct_ggml_hash_set)], None, enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_hash_set_reset", [ctypes.POINTER(struct_ggml_hash_set)], None)
 def ggml_hash_set_reset(hash_set: ctypes._Pointer[struct_ggml_hash_set]) -> None:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_hash_set_free", [ctypes.POINTER(struct_ggml_hash_set)], None, enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_hash_set_free", [ctypes.POINTER(struct_ggml_hash_set)], None)
 def ggml_hash_set_free(hash_set: ctypes._Pointer[struct_ggml_hash_set]) -> None:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_hash_size", [size_t], size_t, enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_hash_size", [size_t], size_t)
 def ggml_hash_size(min_sz: size_t) -> size_t:
     ...
 
@@ -3486,67 +3487,67 @@ struct_hash_map._fields_ = [
     ('vals', ctypes.POINTER(ctypes.POINTER(struct_ggml_tensor))),
 ]
 
-@ctypes_function_for_shared_library('FIXME_STUB')("ggml_new_hash_map", [size_t], ctypes.POINTER(struct_hash_map), enabled=False)
+@ctypes_function_for_shared_library('FIXME_STUB')("ggml_new_hash_map", [size_t], ctypes.POINTER(struct_hash_map))
 def ggml_new_hash_map(size: size_t) -> ctypes._Pointer[struct_hash_map]:
     ...
 
-@ctypes_function_for_shared_library('FIXME_STUB')("ggml_hash_map_free", [ctypes.POINTER(struct_hash_map)], None, enabled=False)
+@ctypes_function_for_shared_library('FIXME_STUB')("ggml_hash_map_free", [ctypes.POINTER(struct_hash_map)], None)
 def ggml_hash_map_free(map: ctypes._Pointer[struct_hash_map]) -> None:
     ...
 
-@ctypes_function_for_shared_library('FIXME_STUB')("ggml_add_or_set", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_cgraph), size_t, ctypes.POINTER(struct_ggml_tensor)], None, enabled=False)
+@ctypes_function_for_shared_library('FIXME_STUB')("ggml_add_or_set", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_cgraph), size_t, ctypes.POINTER(struct_ggml_tensor)], None)
 def ggml_add_or_set(ctx: ctypes._Pointer[struct_ggml_context], cgraph: ctypes._Pointer[struct_ggml_cgraph], isrc: size_t, tensor: ctypes._Pointer[struct_ggml_tensor]) -> None:
     ...
 
-@ctypes_function_for_shared_library('FIXME_STUB')("ggml_acc_or_set", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_cgraph), size_t, ctypes.POINTER(struct_ggml_tensor), size_t, size_t, size_t, size_t], None, enabled=False)
+@ctypes_function_for_shared_library('FIXME_STUB')("ggml_acc_or_set", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_cgraph), size_t, ctypes.POINTER(struct_ggml_tensor), size_t, size_t, size_t, size_t], None)
 def ggml_acc_or_set(ctx: ctypes._Pointer[struct_ggml_context], cgraph: ctypes._Pointer[struct_ggml_cgraph], isrc: size_t, tensor: ctypes._Pointer[struct_ggml_tensor], nb1: size_t, nb2: size_t, nb3: size_t, offset: size_t) -> None:
     ...
 
-@ctypes_function_for_shared_library('FIXME_STUB')("ggml_add1_or_set", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_cgraph), size_t, ctypes.POINTER(struct_ggml_tensor)], None, enabled=False)
+@ctypes_function_for_shared_library('FIXME_STUB')("ggml_add1_or_set", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_cgraph), size_t, ctypes.POINTER(struct_ggml_tensor)], None)
 def ggml_add1_or_set(ctx: ctypes._Pointer[struct_ggml_context], cgraph: ctypes._Pointer[struct_ggml_cgraph], isrc: size_t, tensor: ctypes._Pointer[struct_ggml_tensor]) -> None:
     ...
 
-@ctypes_function_for_shared_library('FIXME_STUB')("ggml_sub_or_set", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_cgraph), size_t, ctypes.POINTER(struct_ggml_tensor)], None, enabled=False)
+@ctypes_function_for_shared_library('FIXME_STUB')("ggml_sub_or_set", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_cgraph), size_t, ctypes.POINTER(struct_ggml_tensor)], None)
 def ggml_sub_or_set(ctx: ctypes._Pointer[struct_ggml_context], cgraph: ctypes._Pointer[struct_ggml_cgraph], isrc: size_t, tensor: ctypes._Pointer[struct_ggml_tensor]) -> None:
     ...
 
-@ctypes_function_for_shared_library('FIXME_STUB')("ggml_compute_backward", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_cgraph), ctypes.c_int32, ctypes.POINTER(ctypes.c_bool)], None, enabled=False)
+@ctypes_function_for_shared_library('FIXME_STUB')("ggml_compute_backward", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_cgraph), ctypes.c_int32, ctypes.POINTER(ctypes.c_bool)], None)
 def ggml_compute_backward(ctx: ctypes._Pointer[struct_ggml_context], cgraph: ctypes._Pointer[struct_ggml_cgraph], i: ctypes.c_int32, grads_needed: ctypes._Pointer[ctypes.c_bool]) -> None:
     ...
 
-@ctypes_function_for_shared_library('FIXME_STUB')("ggml_visit_parents", [ctypes.POINTER(struct_ggml_cgraph), ctypes.POINTER(struct_ggml_tensor)], None, enabled=False)
+@ctypes_function_for_shared_library('FIXME_STUB')("ggml_visit_parents", [ctypes.POINTER(struct_ggml_cgraph), ctypes.POINTER(struct_ggml_tensor)], None)
 def ggml_visit_parents(cgraph: ctypes._Pointer[struct_ggml_cgraph], node: ctypes._Pointer[struct_ggml_tensor]) -> None:
     ...
 
-@ctypes_function_for_shared_library('FIXME_STUB')("ggml_build_forward_impl", [ctypes.POINTER(struct_ggml_cgraph), ctypes.POINTER(struct_ggml_tensor), ctypes.c_bool], None, enabled=False)
+@ctypes_function_for_shared_library('FIXME_STUB')("ggml_build_forward_impl", [ctypes.POINTER(struct_ggml_cgraph), ctypes.POINTER(struct_ggml_tensor), ctypes.c_bool], None)
 def ggml_build_forward_impl(cgraph: ctypes._Pointer[struct_ggml_cgraph], tensor: ctypes._Pointer[struct_ggml_tensor], expand: ctypes.c_bool) -> None:
     ...
 
-@ctypes_function_for_shared_library('FIXME_STUB')("incr_ptr_aligned", [ctypes.POINTER(ctypes.POINTER(None)), size_t, size_t], ctypes.POINTER(None), enabled=False)
+@ctypes_function_for_shared_library('FIXME_STUB')("incr_ptr_aligned", [ctypes.POINTER(ctypes.POINTER(None)), size_t, size_t], ctypes.POINTER(None))
 def incr_ptr_aligned(p: ctypes._Pointer[ctypes.c_void_p], size: size_t, align: size_t) -> ctypes.c_void_p:
     ...
 
-@ctypes_function_for_shared_library('FIXME_STUB')("ggml_graph_nbytes", [size_t, ctypes.c_bool], size_t, enabled=False)
+@ctypes_function_for_shared_library('FIXME_STUB')("ggml_graph_nbytes", [size_t, ctypes.c_bool], size_t)
 def ggml_graph_nbytes(size: size_t, grads: ctypes.c_bool) -> size_t:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_graph_view", [ctypes.POINTER(struct_ggml_cgraph), ctypes.c_int32, ctypes.c_int32], struct_ggml_cgraph, enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_graph_view", [ctypes.POINTER(struct_ggml_cgraph), ctypes.c_int32, ctypes.c_int32], struct_ggml_cgraph)
 def ggml_graph_view(cgraph0: ctypes._Pointer[struct_ggml_cgraph], i0: ctypes.c_int32, i1: ctypes.c_int32) -> struct_ggml_cgraph:
     ...
 
-@ctypes_function_for_shared_library('FIXME_STUB')("ggml_graph_find", [ctypes.POINTER(struct_ggml_cgraph), ctypes.POINTER(struct_ggml_tensor)], ctypes.c_bool, enabled=False)
+@ctypes_function_for_shared_library('FIXME_STUB')("ggml_graph_find", [ctypes.POINTER(struct_ggml_cgraph), ctypes.POINTER(struct_ggml_tensor)], ctypes.c_bool)
 def ggml_graph_find(cgraph: ctypes._Pointer[struct_ggml_cgraph], node: ctypes._Pointer[struct_ggml_tensor]) -> ctypes.c_bool:
     ...
 
-@ctypes_function_for_shared_library('FIXME_STUB')("ggml_graph_get_parent", [ctypes.POINTER(struct_ggml_cgraph), ctypes.POINTER(struct_ggml_tensor)], ctypes.POINTER(struct_ggml_tensor), enabled=False)
+@ctypes_function_for_shared_library('FIXME_STUB')("ggml_graph_get_parent", [ctypes.POINTER(struct_ggml_cgraph), ctypes.POINTER(struct_ggml_tensor)], ctypes.POINTER(struct_ggml_tensor))
 def ggml_graph_get_parent(cgraph: ctypes._Pointer[struct_ggml_cgraph], node: ctypes._Pointer[struct_ggml_tensor]) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
 
-@ctypes_function_for_shared_library('FIXME_STUB')("ggml_graph_dump_dot_node_edge", [ctypes.POINTER(struct__IO_FILE), ctypes.POINTER(struct_ggml_cgraph), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(ctypes.c_char)], None, enabled=False)
+@ctypes_function_for_shared_library('FIXME_STUB')("ggml_graph_dump_dot_node_edge", [ctypes.POINTER(struct__IO_FILE), ctypes.POINTER(struct_ggml_cgraph), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(ctypes.c_char)], None)
 def ggml_graph_dump_dot_node_edge(fp: ctypes._Pointer[struct__IO_FILE], gb: ctypes._Pointer[struct_ggml_cgraph], node: ctypes._Pointer[struct_ggml_tensor], parent: ctypes._Pointer[struct_ggml_tensor], label: ctypes._Pointer[ctypes.c_char]) -> None:
     ...
 
-@ctypes_function_for_shared_library('FIXME_STUB')("ggml_graph_dump_dot_leaf_edge", [ctypes.POINTER(struct__IO_FILE), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(ctypes.c_char)], None, enabled=False)
+@ctypes_function_for_shared_library('FIXME_STUB')("ggml_graph_dump_dot_leaf_edge", [ctypes.POINTER(struct__IO_FILE), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(ctypes.c_char)], None)
 def ggml_graph_dump_dot_leaf_edge(fp: ctypes._Pointer[struct__IO_FILE], node: ctypes._Pointer[struct_ggml_tensor], parent: ctypes._Pointer[struct_ggml_tensor], label: ctypes._Pointer[ctypes.c_char]) -> None:
     ...
 
@@ -3570,33 +3571,33 @@ struct_ggml_backend_sched_split._fields_ = [
     ('graph', struct_ggml_cgraph),
 ]
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_backend_buffer_init", [ggml_backend_buffer_type_t, struct_ggml_backend_buffer_i, ctypes.POINTER(None), size_t], ggml_backend_buffer_t, enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_backend_buffer_init", [ggml_backend_buffer_type_t, struct_ggml_backend_buffer_i, ctypes.POINTER(None), size_t], ggml_backend_buffer_t)
 def ggml_backend_buffer_init(buft: ggml_backend_buffer_type_t, iface: struct_ggml_backend_buffer_i, context: ctypes.c_void_p, size: size_t) -> ggml_backend_buffer_t:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_backend_buffer_copy_tensor", [ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor)], ctypes.c_bool, enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_backend_buffer_copy_tensor", [ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor)], ctypes.c_bool)
 def ggml_backend_buffer_copy_tensor(src: ctypes._Pointer[struct_ggml_tensor], dst: ctypes._Pointer[struct_ggml_tensor]) -> ctypes.c_bool:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_backend_multi_buffer_alloc_buffer", [ctypes.POINTER(ctypes.POINTER(struct_ggml_backend_buffer)), size_t], ggml_backend_buffer_t, enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_backend_multi_buffer_alloc_buffer", [ctypes.POINTER(ctypes.POINTER(struct_ggml_backend_buffer)), size_t], ggml_backend_buffer_t)
 def ggml_backend_multi_buffer_alloc_buffer(buffers: ctypes._Pointer[ctypes._Pointer[struct_ggml_backend_buffer]], n_buffers: size_t) -> ggml_backend_buffer_t:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_backend_buffer_is_multi_buffer", [ggml_backend_buffer_t], ctypes.c_bool, enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_backend_buffer_is_multi_buffer", [ggml_backend_buffer_t], ctypes.c_bool)
 def ggml_backend_buffer_is_multi_buffer(buffer: ggml_backend_buffer_t) -> ctypes.c_bool:
     ...
 
-@ctypes_function_for_shared_library('libggml-base.so')("ggml_backend_multi_buffer_set_usage", [ggml_backend_buffer_t, ggml_backend_buffer_usage], None, enabled=True)
+@ctypes_function_for_shared_library('libggml-base.so')("ggml_backend_multi_buffer_set_usage", [ggml_backend_buffer_t, ggml_backend_buffer_usage], None)
 def ggml_backend_multi_buffer_set_usage(buffer: ggml_backend_buffer_t, usage: ggml_backend_buffer_usage) -> None:
     ...
 
-@ctypes_function_for_shared_library('libggml.so')("ggml_backend_register", [ggml_backend_reg_t], None, enabled=True)
+@ctypes_function_for_shared_library('libggml.so')("ggml_backend_register", [ggml_backend_reg_t], None)
 def ggml_backend_register(reg: ggml_backend_reg_t) -> None:
     ...
 
 ggml_backend_init_t = ctypes.CFUNCTYPE(ctypes.POINTER(struct_ggml_backend_reg))
 ggml_backend_score_t = ctypes.CFUNCTYPE(ctypes.c_int32)
-@ctypes_function_for_shared_library('FIXME_STUB')("ggml_are_same_layout", [ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor)], ctypes.c_bool, enabled=False)
+@ctypes_function_for_shared_library('FIXME_STUB')("ggml_are_same_layout", [ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor)], ctypes.c_bool)
 def ggml_are_same_layout(a: ctypes._Pointer[struct_ggml_tensor], b: ctypes._Pointer[struct_ggml_tensor]) -> ctypes.c_bool:
     ...
 
@@ -3610,164 +3611,1646 @@ struct_ggml_backend_multi_buffer_context._fields_ = [
     ('n_buffers', ctypes.c_uint64),
 ]
 
-@ctypes_function_for_shared_library('FIXME_STUB')("ggml_backend_multi_buffer_free_buffer", [ggml_backend_buffer_t], None, enabled=False)
+@ctypes_function_for_shared_library('FIXME_STUB')("ggml_backend_multi_buffer_free_buffer", [ggml_backend_buffer_t], None)
 def ggml_backend_multi_buffer_free_buffer(buffer: ggml_backend_buffer_t) -> None:
     ...
 
-@ctypes_function_for_shared_library('FIXME_STUB')("ggml_backend_multi_buffer_clear", [ggml_backend_buffer_t, uint8_t], None, enabled=False)
+@ctypes_function_for_shared_library('FIXME_STUB')("ggml_backend_multi_buffer_clear", [ggml_backend_buffer_t, uint8_t], None)
 def ggml_backend_multi_buffer_clear(buffer: ggml_backend_buffer_t, value: uint8_t) -> None:
     ...
 
-@ctypes_function_for_shared_library('FIXME_STUB')("ggml_dup_tensor_layout", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor)], ctypes.POINTER(struct_ggml_tensor), enabled=False)
+@ctypes_function_for_shared_library('FIXME_STUB')("ggml_dup_tensor_layout", [ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor)], ctypes.POINTER(struct_ggml_tensor))
 def ggml_dup_tensor_layout(ctx: ctypes._Pointer[struct_ggml_context], tensor: ctypes._Pointer[struct_ggml_tensor]) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
 
-@ctypes_function_for_shared_library('FIXME_STUB')("ggml_is_view_op", [ggml_op], ctypes.c_bool, enabled=False)
+@ctypes_function_for_shared_library('FIXME_STUB')("ggml_is_view_op", [ggml_op], ctypes.c_bool)
 def ggml_is_view_op(op: ggml_op) -> ctypes.c_bool:
     ...
 
-@ctypes_function_for_shared_library('FIXME_STUB')("ggml_backend_sched_backend_id", [ggml_backend_sched_t, ggml_backend_t], ctypes.c_int32, enabled=False)
+@ctypes_function_for_shared_library('FIXME_STUB')("ggml_backend_sched_backend_id", [ggml_backend_sched_t, ggml_backend_t], ctypes.c_int32)
 def ggml_backend_sched_backend_id(sched: ggml_backend_sched_t, backend: ggml_backend_t) -> ctypes.c_int32:
     ...
 
-@ctypes_function_for_shared_library('FIXME_STUB')("ggml_backend_sched_backend_from_buffer", [ggml_backend_sched_t, ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor)], ctypes.c_int32, enabled=False)
+@ctypes_function_for_shared_library('FIXME_STUB')("ggml_backend_sched_backend_from_buffer", [ggml_backend_sched_t, ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor)], ctypes.c_int32)
 def ggml_backend_sched_backend_from_buffer(sched: ggml_backend_sched_t, tensor: ctypes._Pointer[struct_ggml_tensor], op: ctypes._Pointer[struct_ggml_tensor]) -> ctypes.c_int32:
     ...
 
-@ctypes_function_for_shared_library('FIXME_STUB')("ggml_backend_sched_backend_id_from_cur", [ggml_backend_sched_t, ctypes.POINTER(struct_ggml_tensor)], ctypes.c_int32, enabled=False)
+@ctypes_function_for_shared_library('FIXME_STUB')("ggml_backend_sched_backend_id_from_cur", [ggml_backend_sched_t, ctypes.POINTER(struct_ggml_tensor)], ctypes.c_int32)
 def ggml_backend_sched_backend_id_from_cur(sched: ggml_backend_sched_t, tensor: ctypes._Pointer[struct_ggml_tensor]) -> ctypes.c_int32:
     ...
 
-@ctypes_function_for_shared_library('FIXME_STUB')("fmt_size", [size_t], ctypes.POINTER(ctypes.c_char), enabled=False)
+@ctypes_function_for_shared_library('FIXME_STUB')("fmt_size", [size_t], ctypes.POINTER(ctypes.c_char))
 def fmt_size(size: size_t) -> ctypes._Pointer[ctypes.c_char]:
     ...
 
-@ctypes_function_for_shared_library('FIXME_STUB')("ggml_backend_sched_print_assignments", [ggml_backend_sched_t, ctypes.POINTER(struct_ggml_cgraph)], None, enabled=False)
+@ctypes_function_for_shared_library('FIXME_STUB')("ggml_backend_sched_print_assignments", [ggml_backend_sched_t, ctypes.POINTER(struct_ggml_cgraph)], None)
 def ggml_backend_sched_print_assignments(sched: ggml_backend_sched_t, graph: ctypes._Pointer[struct_ggml_cgraph]) -> None:
     ...
 
-@ctypes_function_for_shared_library('FIXME_STUB')("ggml_backend_sched_buffer_supported", [ggml_backend_sched_t, ctypes.POINTER(struct_ggml_tensor), ctypes.c_int32], ctypes.c_bool, enabled=False)
+@ctypes_function_for_shared_library('FIXME_STUB')("ggml_backend_sched_buffer_supported", [ggml_backend_sched_t, ctypes.POINTER(struct_ggml_tensor), ctypes.c_int32], ctypes.c_bool)
 def ggml_backend_sched_buffer_supported(sched: ggml_backend_sched_t, t: ctypes._Pointer[struct_ggml_tensor], backend_id: ctypes.c_int32) -> ctypes.c_bool:
     ...
 
-@ctypes_function_for_shared_library('FIXME_STUB')("ggml_backend_sched_set_if_supported", [ggml_backend_sched_t, ctypes.POINTER(struct_ggml_tensor), ctypes.c_int32, ctypes.POINTER(ctypes.c_int32)], None, enabled=False)
+@ctypes_function_for_shared_library('FIXME_STUB')("ggml_backend_sched_set_if_supported", [ggml_backend_sched_t, ctypes.POINTER(struct_ggml_tensor), ctypes.c_int32, ctypes.POINTER(ctypes.c_int32)], None)
 def ggml_backend_sched_set_if_supported(sched: ggml_backend_sched_t, node: ctypes._Pointer[struct_ggml_tensor], cur_backend_id: ctypes.c_int32, node_backend_id: ctypes._Pointer[ctypes.c_int32]) -> None:
     ...
 
-@ctypes_function_for_shared_library('FIXME_STUB')("ggml_backend_sched_split_graph", [ggml_backend_sched_t, ctypes.POINTER(struct_ggml_cgraph)], None, enabled=False)
+@ctypes_function_for_shared_library('FIXME_STUB')("ggml_backend_sched_split_graph", [ggml_backend_sched_t, ctypes.POINTER(struct_ggml_cgraph)], None)
 def ggml_backend_sched_split_graph(sched: ggml_backend_sched_t, graph: ctypes._Pointer[struct_ggml_cgraph]) -> None:
     ...
 
-@ctypes_function_for_shared_library('FIXME_STUB')("ggml_backend_sched_alloc_splits", [ggml_backend_sched_t], ctypes.c_bool, enabled=False)
+@ctypes_function_for_shared_library('FIXME_STUB')("ggml_backend_sched_alloc_splits", [ggml_backend_sched_t], ctypes.c_bool)
 def ggml_backend_sched_alloc_splits(sched: ggml_backend_sched_t) -> ctypes.c_bool:
     ...
 
-@ctypes_function_for_shared_library('FIXME_STUB')("ggml_backend_sched_compute_splits", [ggml_backend_sched_t], ggml_status, enabled=False)
+@ctypes_function_for_shared_library('FIXME_STUB')("ggml_backend_sched_compute_splits", [ggml_backend_sched_t], ggml_status)
 def ggml_backend_sched_compute_splits(sched: ggml_backend_sched_t) -> ggml_status:
     ...
 
-@ctypes_function_for_shared_library('FIXME_STUB')("graph_copy_dup_tensor", [struct_ggml_hash_set, ctypes.POINTER(ctypes.POINTER(struct_ggml_tensor)), ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor)], ctypes.POINTER(struct_ggml_tensor), enabled=False)
+@ctypes_function_for_shared_library('FIXME_STUB')("graph_copy_dup_tensor", [struct_ggml_hash_set, ctypes.POINTER(ctypes.POINTER(struct_ggml_tensor)), ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_context), ctypes.POINTER(struct_ggml_tensor)], ctypes.POINTER(struct_ggml_tensor))
 def graph_copy_dup_tensor(hash_set: struct_ggml_hash_set, node_copies: ctypes._Pointer[ctypes._Pointer[struct_ggml_tensor]], ctx_allocated: ctypes._Pointer[struct_ggml_context], ctx_unallocated: ctypes._Pointer[struct_ggml_context], src: ctypes._Pointer[struct_ggml_tensor]) -> ctypes._Pointer[struct_ggml_tensor]:
     ...
 
-@ctypes_function_for_shared_library('FIXME_STUB')("graph_copy_init_tensor", [ctypes.POINTER(struct_ggml_hash_set), ctypes.POINTER(ctypes.POINTER(struct_ggml_tensor)), ctypes.POINTER(ctypes.c_bool), ctypes.POINTER(struct_ggml_tensor)], None, enabled=False)
+@ctypes_function_for_shared_library('FIXME_STUB')("graph_copy_init_tensor", [ctypes.POINTER(struct_ggml_hash_set), ctypes.POINTER(ctypes.POINTER(struct_ggml_tensor)), ctypes.POINTER(ctypes.c_bool), ctypes.POINTER(struct_ggml_tensor)], None)
 def graph_copy_init_tensor(hash_set: ctypes._Pointer[struct_ggml_hash_set], node_copies: ctypes._Pointer[ctypes._Pointer[struct_ggml_tensor]], node_init: ctypes._Pointer[ctypes.c_bool], src: ctypes._Pointer[struct_ggml_tensor]) -> None:
     ...
 
-@ctypes_function_for_shared_library('FIXME_STUB')("ggml_backend_cpu_buffer_get_base", [ggml_backend_buffer_t], ctypes.POINTER(None), enabled=False)
+@ctypes_function_for_shared_library('FIXME_STUB')("ggml_backend_cpu_buffer_get_base", [ggml_backend_buffer_t], ctypes.POINTER(None))
 def ggml_backend_cpu_buffer_get_base(buffer: ggml_backend_buffer_t) -> ctypes.c_void_p:
     ...
 
-@ctypes_function_for_shared_library('FIXME_STUB')("ggml_backend_cpu_buffer_free_buffer", [ggml_backend_buffer_t], None, enabled=False)
+@ctypes_function_for_shared_library('FIXME_STUB')("ggml_backend_cpu_buffer_free_buffer", [ggml_backend_buffer_t], None)
 def ggml_backend_cpu_buffer_free_buffer(buffer: ggml_backend_buffer_t) -> None:
     ...
 
-@ctypes_function_for_shared_library('FIXME_STUB')("ggml_backend_cpu_buffer_memset_tensor", [ggml_backend_buffer_t, ctypes.POINTER(struct_ggml_tensor), uint8_t, size_t, size_t], None, enabled=False)
+@ctypes_function_for_shared_library('FIXME_STUB')("ggml_backend_cpu_buffer_memset_tensor", [ggml_backend_buffer_t, ctypes.POINTER(struct_ggml_tensor), uint8_t, size_t, size_t], None)
 def ggml_backend_cpu_buffer_memset_tensor(buffer: ggml_backend_buffer_t, tensor: ctypes._Pointer[struct_ggml_tensor], value: uint8_t, offset: size_t, size: size_t) -> None:
     ...
 
-@ctypes_function_for_shared_library('FIXME_STUB')("ggml_backend_cpu_buffer_set_tensor", [ggml_backend_buffer_t, ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(None), size_t, size_t], None, enabled=False)
+@ctypes_function_for_shared_library('FIXME_STUB')("ggml_backend_cpu_buffer_set_tensor", [ggml_backend_buffer_t, ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(None), size_t, size_t], None)
 def ggml_backend_cpu_buffer_set_tensor(buffer: ggml_backend_buffer_t, tensor: ctypes._Pointer[struct_ggml_tensor], data: ctypes.c_void_p, offset: size_t, size: size_t) -> None:
     ...
 
-@ctypes_function_for_shared_library('FIXME_STUB')("ggml_backend_cpu_buffer_get_tensor", [ggml_backend_buffer_t, ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(None), size_t, size_t], None, enabled=False)
+@ctypes_function_for_shared_library('FIXME_STUB')("ggml_backend_cpu_buffer_get_tensor", [ggml_backend_buffer_t, ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(None), size_t, size_t], None)
 def ggml_backend_cpu_buffer_get_tensor(buffer: ggml_backend_buffer_t, tensor: ctypes._Pointer[struct_ggml_tensor], data: ctypes.c_void_p, offset: size_t, size: size_t) -> None:
     ...
 
-@ctypes_function_for_shared_library('FIXME_STUB')("ggml_backend_cpu_buffer_cpy_tensor", [ggml_backend_buffer_t, ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor)], ctypes.c_bool, enabled=False)
+@ctypes_function_for_shared_library('FIXME_STUB')("ggml_backend_cpu_buffer_cpy_tensor", [ggml_backend_buffer_t, ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(struct_ggml_tensor)], ctypes.c_bool)
 def ggml_backend_cpu_buffer_cpy_tensor(buffer: ggml_backend_buffer_t, src: ctypes._Pointer[struct_ggml_tensor], dst: ctypes._Pointer[struct_ggml_tensor]) -> ctypes.c_bool:
     ...
 
-@ctypes_function_for_shared_library('FIXME_STUB')("ggml_backend_cpu_buffer_clear", [ggml_backend_buffer_t, uint8_t], None, enabled=False)
+@ctypes_function_for_shared_library('FIXME_STUB')("ggml_backend_cpu_buffer_clear", [ggml_backend_buffer_t, uint8_t], None)
 def ggml_backend_cpu_buffer_clear(buffer: ggml_backend_buffer_t, value: uint8_t) -> None:
     ...
 
-@ctypes_function_for_shared_library('FIXME_STUB')("ggml_backend_cpu_buffer_type_get_name", [ggml_backend_buffer_type_t], ctypes.POINTER(ctypes.c_char), enabled=False)
+@ctypes_function_for_shared_library('FIXME_STUB')("ggml_backend_cpu_buffer_type_get_name", [ggml_backend_buffer_type_t], ctypes.POINTER(ctypes.c_char))
 def ggml_backend_cpu_buffer_type_get_name(buft: ggml_backend_buffer_type_t) -> ctypes._Pointer[ctypes.c_char]:
     ...
 
-@ctypes_function_for_shared_library('FIXME_STUB')("ggml_backend_cpu_buffer_type_alloc_buffer", [ggml_backend_buffer_type_t, size_t], ggml_backend_buffer_t, enabled=False)
+@ctypes_function_for_shared_library('FIXME_STUB')("ggml_backend_cpu_buffer_type_alloc_buffer", [ggml_backend_buffer_type_t, size_t], ggml_backend_buffer_t)
 def ggml_backend_cpu_buffer_type_alloc_buffer(buft: ggml_backend_buffer_type_t, size: size_t) -> ggml_backend_buffer_t:
     ...
 
-@ctypes_function_for_shared_library('FIXME_STUB')("ggml_backend_cpu_buffer_type_get_alignment", [ggml_backend_buffer_type_t], size_t, enabled=False)
+@ctypes_function_for_shared_library('FIXME_STUB')("ggml_backend_cpu_buffer_type_get_alignment", [ggml_backend_buffer_type_t], size_t)
 def ggml_backend_cpu_buffer_type_get_alignment(buft: ggml_backend_buffer_type_t) -> size_t:
     ...
 
-@ctypes_function_for_shared_library('FIXME_STUB')("ggml_backend_cpu_buffer_type_is_host", [ggml_backend_buffer_type_t], ctypes.c_bool, enabled=False)
+@ctypes_function_for_shared_library('FIXME_STUB')("ggml_backend_cpu_buffer_type_is_host", [ggml_backend_buffer_type_t], ctypes.c_bool)
 def ggml_backend_cpu_buffer_type_is_host(buft: ggml_backend_buffer_type_t) -> ctypes.c_bool:
     ...
 
-@ctypes_function_for_shared_library('FIXME_STUB')("ggml_backend_cpu_buffer_from_ptr_type_get_name", [ggml_backend_buffer_type_t], ctypes.POINTER(ctypes.c_char), enabled=False)
+@ctypes_function_for_shared_library('FIXME_STUB')("ggml_backend_cpu_buffer_from_ptr_type_get_name", [ggml_backend_buffer_type_t], ctypes.POINTER(ctypes.c_char))
 def ggml_backend_cpu_buffer_from_ptr_type_get_name(buft: ggml_backend_buffer_type_t) -> ctypes._Pointer[ctypes.c_char]:
     ...
 
-@ctypes_function_for_shared_library('FIXME_STUB')("ggml_backend_cpu_buffer_from_ptr_type", [], ggml_backend_buffer_type_t, enabled=False)
+@ctypes_function_for_shared_library('FIXME_STUB')("ggml_backend_cpu_buffer_from_ptr_type", [], ggml_backend_buffer_type_t)
 def ggml_backend_cpu_buffer_from_ptr_type() -> ggml_backend_buffer_type_t:
     ...
 
-@ctypes_function_for_shared_library('FIXME_STUB')("ggml_backend_cuda_init", [ctypes.c_int32], ggml_backend_t, enabled=False)
+@ctypes_function_for_shared_library('libggml-cuda.so')("ggml_backend_cuda_init", [ctypes.c_int32], ggml_backend_t)
 def ggml_backend_cuda_init(device: ctypes.c_int32) -> ggml_backend_t:
     ...
 
-@ctypes_function_for_shared_library('FIXME_STUB')("ggml_backend_is_cuda", [ggml_backend_t], ctypes.c_bool, enabled=False)
+@ctypes_function_for_shared_library('libggml-cuda.so')("ggml_backend_is_cuda", [ggml_backend_t], ctypes.c_bool)
 def ggml_backend_is_cuda(backend: ggml_backend_t) -> ctypes.c_bool:
     ...
 
-@ctypes_function_for_shared_library('FIXME_STUB')("ggml_backend_cuda_buffer_type", [ctypes.c_int32], ggml_backend_buffer_type_t, enabled=False)
+@ctypes_function_for_shared_library('libggml-cuda.so')("ggml_backend_cuda_buffer_type", [ctypes.c_int32], ggml_backend_buffer_type_t)
 def ggml_backend_cuda_buffer_type(device: ctypes.c_int32) -> ggml_backend_buffer_type_t:
     ...
 
-@ctypes_function_for_shared_library('FIXME_STUB')("ggml_backend_cuda_split_buffer_type", [ctypes.c_int32, ctypes.POINTER(ctypes.c_float)], ggml_backend_buffer_type_t, enabled=False)
+@ctypes_function_for_shared_library('libggml-cuda.so')("ggml_backend_cuda_split_buffer_type", [ctypes.c_int32, ctypes.POINTER(ctypes.c_float)], ggml_backend_buffer_type_t)
 def ggml_backend_cuda_split_buffer_type(main_device: ctypes.c_int32, tensor_split: ctypes._Pointer[ctypes.c_float]) -> ggml_backend_buffer_type_t:
     ...
 
-@ctypes_function_for_shared_library('FIXME_STUB')("ggml_backend_cuda_host_buffer_type", [], ggml_backend_buffer_type_t, enabled=False)
+@ctypes_function_for_shared_library('libggml-cuda.so')("ggml_backend_cuda_host_buffer_type", [], ggml_backend_buffer_type_t)
 def ggml_backend_cuda_host_buffer_type() -> ggml_backend_buffer_type_t:
     ...
 
-@ctypes_function_for_shared_library('FIXME_STUB')("ggml_backend_cuda_get_device_count", [], ctypes.c_int32, enabled=False)
+@ctypes_function_for_shared_library('libggml-cuda.so')("ggml_backend_cuda_get_device_count", [], ctypes.c_int32)
 def ggml_backend_cuda_get_device_count() -> ctypes.c_int32:
     ...
 
-@ctypes_function_for_shared_library('FIXME_STUB')("ggml_backend_cuda_get_device_description", [ctypes.c_int32, ctypes.POINTER(ctypes.c_char), size_t], None, enabled=False)
+@ctypes_function_for_shared_library('libggml-cuda.so')("ggml_backend_cuda_get_device_description", [ctypes.c_int32, ctypes.POINTER(ctypes.c_char), size_t], None)
 def ggml_backend_cuda_get_device_description(device: ctypes.c_int32, description: ctypes._Pointer[ctypes.c_char], description_size: size_t) -> None:
     ...
 
-@ctypes_function_for_shared_library('FIXME_STUB')("ggml_backend_cuda_get_device_memory", [ctypes.c_int32, ctypes.POINTER(ctypes.c_uint64), ctypes.POINTER(ctypes.c_uint64)], None, enabled=False)
+@ctypes_function_for_shared_library('libggml-cuda.so')("ggml_backend_cuda_get_device_memory", [ctypes.c_int32, ctypes.POINTER(ctypes.c_uint64), ctypes.POINTER(ctypes.c_uint64)], None)
 def ggml_backend_cuda_get_device_memory(device: ctypes.c_int32, free: ctypes._Pointer[ctypes.c_uint64], total: ctypes._Pointer[ctypes.c_uint64]) -> None:
     ...
 
-@ctypes_function_for_shared_library('FIXME_STUB')("ggml_backend_cuda_register_host_buffer", [ctypes.POINTER(None), size_t], ctypes.c_bool, enabled=False)
+@ctypes_function_for_shared_library('libggml-cuda.so')("ggml_backend_cuda_register_host_buffer", [ctypes.POINTER(None), size_t], ctypes.c_bool)
 def ggml_backend_cuda_register_host_buffer(buffer: ctypes.c_void_p, size: size_t) -> ctypes.c_bool:
     ...
 
-@ctypes_function_for_shared_library('FIXME_STUB')("ggml_backend_cuda_unregister_host_buffer", [ctypes.POINTER(None)], None, enabled=False)
+@ctypes_function_for_shared_library('libggml-cuda.so')("ggml_backend_cuda_unregister_host_buffer", [ctypes.POINTER(None)], None)
 def ggml_backend_cuda_unregister_host_buffer(buffer: ctypes.c_void_p) -> None:
     ...
 
-@ctypes_function_for_shared_library('FIXME_STUB')("ggml_backend_cuda_reg", [], ggml_backend_reg_t, enabled=False)
+@ctypes_function_for_shared_library('libggml-cuda.so')("ggml_backend_cuda_reg", [], ggml_backend_reg_t)
 def ggml_backend_cuda_reg() -> ggml_backend_reg_t:
+    ...
+
+class struct_llama_vocab(Structure):
+    pass
+
+class struct_llama_model(Structure):
+    pass
+
+class struct_llama_context(Structure):
+    pass
+
+class struct_llama_kv_cache(Structure):
+    pass
+
+llama_pos = ctypes.c_int32
+llama_token = ctypes.c_int32
+llama_seq_id = ctypes.c_int32
+
+# values for enumeration 'llama_vocab_type'
+llama_vocab_type__enumvalues = {
+    0: 'LLAMA_VOCAB_TYPE_NONE',
+    1: 'LLAMA_VOCAB_TYPE_SPM',
+    2: 'LLAMA_VOCAB_TYPE_BPE',
+    3: 'LLAMA_VOCAB_TYPE_WPM',
+    4: 'LLAMA_VOCAB_TYPE_UGM',
+    5: 'LLAMA_VOCAB_TYPE_RWKV',
+}
+LLAMA_VOCAB_TYPE_NONE = 0
+LLAMA_VOCAB_TYPE_SPM = 1
+LLAMA_VOCAB_TYPE_BPE = 2
+LLAMA_VOCAB_TYPE_WPM = 3
+LLAMA_VOCAB_TYPE_UGM = 4
+LLAMA_VOCAB_TYPE_RWKV = 5
+llama_vocab_type = ctypes.c_uint32 # enum
+
+# values for enumeration 'llama_vocab_pre_type'
+llama_vocab_pre_type__enumvalues = {
+    0: 'LLAMA_VOCAB_PRE_TYPE_DEFAULT',
+    1: 'LLAMA_VOCAB_PRE_TYPE_LLAMA3',
+    2: 'LLAMA_VOCAB_PRE_TYPE_DEEPSEEK_LLM',
+    3: 'LLAMA_VOCAB_PRE_TYPE_DEEPSEEK_CODER',
+    4: 'LLAMA_VOCAB_PRE_TYPE_FALCON',
+    5: 'LLAMA_VOCAB_PRE_TYPE_MPT',
+    6: 'LLAMA_VOCAB_PRE_TYPE_STARCODER',
+    7: 'LLAMA_VOCAB_PRE_TYPE_GPT2',
+    8: 'LLAMA_VOCAB_PRE_TYPE_REFACT',
+    9: 'LLAMA_VOCAB_PRE_TYPE_COMMAND_R',
+    10: 'LLAMA_VOCAB_PRE_TYPE_STABLELM2',
+    11: 'LLAMA_VOCAB_PRE_TYPE_QWEN2',
+    12: 'LLAMA_VOCAB_PRE_TYPE_OLMO',
+    13: 'LLAMA_VOCAB_PRE_TYPE_DBRX',
+    14: 'LLAMA_VOCAB_PRE_TYPE_SMAUG',
+    15: 'LLAMA_VOCAB_PRE_TYPE_PORO',
+    16: 'LLAMA_VOCAB_PRE_TYPE_CHATGLM3',
+    17: 'LLAMA_VOCAB_PRE_TYPE_CHATGLM4',
+    18: 'LLAMA_VOCAB_PRE_TYPE_VIKING',
+    19: 'LLAMA_VOCAB_PRE_TYPE_JAIS',
+    20: 'LLAMA_VOCAB_PRE_TYPE_TEKKEN',
+    21: 'LLAMA_VOCAB_PRE_TYPE_SMOLLM',
+    22: 'LLAMA_VOCAB_PRE_TYPE_CODESHELL',
+    23: 'LLAMA_VOCAB_PRE_TYPE_BLOOM',
+    24: 'LLAMA_VOCAB_PRE_TYPE_GPT3_FINNISH',
+    25: 'LLAMA_VOCAB_PRE_TYPE_EXAONE',
+    26: 'LLAMA_VOCAB_PRE_TYPE_CHAMELEON',
+    27: 'LLAMA_VOCAB_PRE_TYPE_MINERVA',
+    28: 'LLAMA_VOCAB_PRE_TYPE_DEEPSEEK3_LLM',
+    29: 'LLAMA_VOCAB_PRE_TYPE_GPT4O',
+    30: 'LLAMA_VOCAB_PRE_TYPE_SUPERBPE',
+    31: 'LLAMA_VOCAB_PRE_TYPE_TRILLION',
+    32: 'LLAMA_VOCAB_PRE_TYPE_BAILINGMOE',
+    33: 'LLAMA_VOCAB_PRE_TYPE_LLAMA4',
+    34: 'LLAMA_VOCAB_PRE_TYPE_PIXTRAL',
+    35: 'LLAMA_VOCAB_PRE_TYPE_SEED_CODER',
+}
+LLAMA_VOCAB_PRE_TYPE_DEFAULT = 0
+LLAMA_VOCAB_PRE_TYPE_LLAMA3 = 1
+LLAMA_VOCAB_PRE_TYPE_DEEPSEEK_LLM = 2
+LLAMA_VOCAB_PRE_TYPE_DEEPSEEK_CODER = 3
+LLAMA_VOCAB_PRE_TYPE_FALCON = 4
+LLAMA_VOCAB_PRE_TYPE_MPT = 5
+LLAMA_VOCAB_PRE_TYPE_STARCODER = 6
+LLAMA_VOCAB_PRE_TYPE_GPT2 = 7
+LLAMA_VOCAB_PRE_TYPE_REFACT = 8
+LLAMA_VOCAB_PRE_TYPE_COMMAND_R = 9
+LLAMA_VOCAB_PRE_TYPE_STABLELM2 = 10
+LLAMA_VOCAB_PRE_TYPE_QWEN2 = 11
+LLAMA_VOCAB_PRE_TYPE_OLMO = 12
+LLAMA_VOCAB_PRE_TYPE_DBRX = 13
+LLAMA_VOCAB_PRE_TYPE_SMAUG = 14
+LLAMA_VOCAB_PRE_TYPE_PORO = 15
+LLAMA_VOCAB_PRE_TYPE_CHATGLM3 = 16
+LLAMA_VOCAB_PRE_TYPE_CHATGLM4 = 17
+LLAMA_VOCAB_PRE_TYPE_VIKING = 18
+LLAMA_VOCAB_PRE_TYPE_JAIS = 19
+LLAMA_VOCAB_PRE_TYPE_TEKKEN = 20
+LLAMA_VOCAB_PRE_TYPE_SMOLLM = 21
+LLAMA_VOCAB_PRE_TYPE_CODESHELL = 22
+LLAMA_VOCAB_PRE_TYPE_BLOOM = 23
+LLAMA_VOCAB_PRE_TYPE_GPT3_FINNISH = 24
+LLAMA_VOCAB_PRE_TYPE_EXAONE = 25
+LLAMA_VOCAB_PRE_TYPE_CHAMELEON = 26
+LLAMA_VOCAB_PRE_TYPE_MINERVA = 27
+LLAMA_VOCAB_PRE_TYPE_DEEPSEEK3_LLM = 28
+LLAMA_VOCAB_PRE_TYPE_GPT4O = 29
+LLAMA_VOCAB_PRE_TYPE_SUPERBPE = 30
+LLAMA_VOCAB_PRE_TYPE_TRILLION = 31
+LLAMA_VOCAB_PRE_TYPE_BAILINGMOE = 32
+LLAMA_VOCAB_PRE_TYPE_LLAMA4 = 33
+LLAMA_VOCAB_PRE_TYPE_PIXTRAL = 34
+LLAMA_VOCAB_PRE_TYPE_SEED_CODER = 35
+llama_vocab_pre_type = ctypes.c_uint32 # enum
+
+# values for enumeration 'llama_rope_type'
+llama_rope_type__enumvalues = {
+    -1: 'LLAMA_ROPE_TYPE_NONE',
+    0: 'LLAMA_ROPE_TYPE_NORM',
+    2: 'LLAMA_ROPE_TYPE_NEOX',
+    8: 'LLAMA_ROPE_TYPE_MROPE',
+    24: 'LLAMA_ROPE_TYPE_VISION',
+}
+LLAMA_ROPE_TYPE_NONE = -1
+LLAMA_ROPE_TYPE_NORM = 0
+LLAMA_ROPE_TYPE_NEOX = 2
+LLAMA_ROPE_TYPE_MROPE = 8
+LLAMA_ROPE_TYPE_VISION = 24
+llama_rope_type = ctypes.c_int32 # enum
+
+# values for enumeration 'llama_token_type'
+llama_token_type__enumvalues = {
+    0: 'LLAMA_TOKEN_TYPE_UNDEFINED',
+    1: 'LLAMA_TOKEN_TYPE_NORMAL',
+    2: 'LLAMA_TOKEN_TYPE_UNKNOWN',
+    3: 'LLAMA_TOKEN_TYPE_CONTROL',
+    4: 'LLAMA_TOKEN_TYPE_USER_DEFINED',
+    5: 'LLAMA_TOKEN_TYPE_UNUSED',
+    6: 'LLAMA_TOKEN_TYPE_BYTE',
+}
+LLAMA_TOKEN_TYPE_UNDEFINED = 0
+LLAMA_TOKEN_TYPE_NORMAL = 1
+LLAMA_TOKEN_TYPE_UNKNOWN = 2
+LLAMA_TOKEN_TYPE_CONTROL = 3
+LLAMA_TOKEN_TYPE_USER_DEFINED = 4
+LLAMA_TOKEN_TYPE_UNUSED = 5
+LLAMA_TOKEN_TYPE_BYTE = 6
+llama_token_type = ctypes.c_uint32 # enum
+
+# values for enumeration 'llama_token_attr'
+llama_token_attr__enumvalues = {
+    0: 'LLAMA_TOKEN_ATTR_UNDEFINED',
+    1: 'LLAMA_TOKEN_ATTR_UNKNOWN',
+    2: 'LLAMA_TOKEN_ATTR_UNUSED',
+    4: 'LLAMA_TOKEN_ATTR_NORMAL',
+    8: 'LLAMA_TOKEN_ATTR_CONTROL',
+    16: 'LLAMA_TOKEN_ATTR_USER_DEFINED',
+    32: 'LLAMA_TOKEN_ATTR_BYTE',
+    64: 'LLAMA_TOKEN_ATTR_NORMALIZED',
+    128: 'LLAMA_TOKEN_ATTR_LSTRIP',
+    256: 'LLAMA_TOKEN_ATTR_RSTRIP',
+    512: 'LLAMA_TOKEN_ATTR_SINGLE_WORD',
+}
+LLAMA_TOKEN_ATTR_UNDEFINED = 0
+LLAMA_TOKEN_ATTR_UNKNOWN = 1
+LLAMA_TOKEN_ATTR_UNUSED = 2
+LLAMA_TOKEN_ATTR_NORMAL = 4
+LLAMA_TOKEN_ATTR_CONTROL = 8
+LLAMA_TOKEN_ATTR_USER_DEFINED = 16
+LLAMA_TOKEN_ATTR_BYTE = 32
+LLAMA_TOKEN_ATTR_NORMALIZED = 64
+LLAMA_TOKEN_ATTR_LSTRIP = 128
+LLAMA_TOKEN_ATTR_RSTRIP = 256
+LLAMA_TOKEN_ATTR_SINGLE_WORD = 512
+llama_token_attr = ctypes.c_uint32 # enum
+
+# values for enumeration 'llama_ftype'
+llama_ftype__enumvalues = {
+    0: 'LLAMA_FTYPE_ALL_F32',
+    1: 'LLAMA_FTYPE_MOSTLY_F16',
+    2: 'LLAMA_FTYPE_MOSTLY_Q4_0',
+    3: 'LLAMA_FTYPE_MOSTLY_Q4_1',
+    7: 'LLAMA_FTYPE_MOSTLY_Q8_0',
+    8: 'LLAMA_FTYPE_MOSTLY_Q5_0',
+    9: 'LLAMA_FTYPE_MOSTLY_Q5_1',
+    10: 'LLAMA_FTYPE_MOSTLY_Q2_K',
+    11: 'LLAMA_FTYPE_MOSTLY_Q3_K_S',
+    12: 'LLAMA_FTYPE_MOSTLY_Q3_K_M',
+    13: 'LLAMA_FTYPE_MOSTLY_Q3_K_L',
+    14: 'LLAMA_FTYPE_MOSTLY_Q4_K_S',
+    15: 'LLAMA_FTYPE_MOSTLY_Q4_K_M',
+    16: 'LLAMA_FTYPE_MOSTLY_Q5_K_S',
+    17: 'LLAMA_FTYPE_MOSTLY_Q5_K_M',
+    18: 'LLAMA_FTYPE_MOSTLY_Q6_K',
+    19: 'LLAMA_FTYPE_MOSTLY_IQ2_XXS',
+    20: 'LLAMA_FTYPE_MOSTLY_IQ2_XS',
+    21: 'LLAMA_FTYPE_MOSTLY_Q2_K_S',
+    22: 'LLAMA_FTYPE_MOSTLY_IQ3_XS',
+    23: 'LLAMA_FTYPE_MOSTLY_IQ3_XXS',
+    24: 'LLAMA_FTYPE_MOSTLY_IQ1_S',
+    25: 'LLAMA_FTYPE_MOSTLY_IQ4_NL',
+    26: 'LLAMA_FTYPE_MOSTLY_IQ3_S',
+    27: 'LLAMA_FTYPE_MOSTLY_IQ3_M',
+    28: 'LLAMA_FTYPE_MOSTLY_IQ2_S',
+    29: 'LLAMA_FTYPE_MOSTLY_IQ2_M',
+    30: 'LLAMA_FTYPE_MOSTLY_IQ4_XS',
+    31: 'LLAMA_FTYPE_MOSTLY_IQ1_M',
+    32: 'LLAMA_FTYPE_MOSTLY_BF16',
+    36: 'LLAMA_FTYPE_MOSTLY_TQ1_0',
+    37: 'LLAMA_FTYPE_MOSTLY_TQ2_0',
+    1024: 'LLAMA_FTYPE_GUESSED',
+}
+LLAMA_FTYPE_ALL_F32 = 0
+LLAMA_FTYPE_MOSTLY_F16 = 1
+LLAMA_FTYPE_MOSTLY_Q4_0 = 2
+LLAMA_FTYPE_MOSTLY_Q4_1 = 3
+LLAMA_FTYPE_MOSTLY_Q8_0 = 7
+LLAMA_FTYPE_MOSTLY_Q5_0 = 8
+LLAMA_FTYPE_MOSTLY_Q5_1 = 9
+LLAMA_FTYPE_MOSTLY_Q2_K = 10
+LLAMA_FTYPE_MOSTLY_Q3_K_S = 11
+LLAMA_FTYPE_MOSTLY_Q3_K_M = 12
+LLAMA_FTYPE_MOSTLY_Q3_K_L = 13
+LLAMA_FTYPE_MOSTLY_Q4_K_S = 14
+LLAMA_FTYPE_MOSTLY_Q4_K_M = 15
+LLAMA_FTYPE_MOSTLY_Q5_K_S = 16
+LLAMA_FTYPE_MOSTLY_Q5_K_M = 17
+LLAMA_FTYPE_MOSTLY_Q6_K = 18
+LLAMA_FTYPE_MOSTLY_IQ2_XXS = 19
+LLAMA_FTYPE_MOSTLY_IQ2_XS = 20
+LLAMA_FTYPE_MOSTLY_Q2_K_S = 21
+LLAMA_FTYPE_MOSTLY_IQ3_XS = 22
+LLAMA_FTYPE_MOSTLY_IQ3_XXS = 23
+LLAMA_FTYPE_MOSTLY_IQ1_S = 24
+LLAMA_FTYPE_MOSTLY_IQ4_NL = 25
+LLAMA_FTYPE_MOSTLY_IQ3_S = 26
+LLAMA_FTYPE_MOSTLY_IQ3_M = 27
+LLAMA_FTYPE_MOSTLY_IQ2_S = 28
+LLAMA_FTYPE_MOSTLY_IQ2_M = 29
+LLAMA_FTYPE_MOSTLY_IQ4_XS = 30
+LLAMA_FTYPE_MOSTLY_IQ1_M = 31
+LLAMA_FTYPE_MOSTLY_BF16 = 32
+LLAMA_FTYPE_MOSTLY_TQ1_0 = 36
+LLAMA_FTYPE_MOSTLY_TQ2_0 = 37
+LLAMA_FTYPE_GUESSED = 1024
+llama_ftype = ctypes.c_uint32 # enum
+
+# values for enumeration 'llama_rope_scaling_type'
+llama_rope_scaling_type__enumvalues = {
+    -1: 'LLAMA_ROPE_SCALING_TYPE_UNSPECIFIED',
+    0: 'LLAMA_ROPE_SCALING_TYPE_NONE',
+    1: 'LLAMA_ROPE_SCALING_TYPE_LINEAR',
+    2: 'LLAMA_ROPE_SCALING_TYPE_YARN',
+    3: 'LLAMA_ROPE_SCALING_TYPE_LONGROPE',
+    3: 'LLAMA_ROPE_SCALING_TYPE_MAX_VALUE',
+}
+LLAMA_ROPE_SCALING_TYPE_UNSPECIFIED = -1
+LLAMA_ROPE_SCALING_TYPE_NONE = 0
+LLAMA_ROPE_SCALING_TYPE_LINEAR = 1
+LLAMA_ROPE_SCALING_TYPE_YARN = 2
+LLAMA_ROPE_SCALING_TYPE_LONGROPE = 3
+LLAMA_ROPE_SCALING_TYPE_MAX_VALUE = 3
+llama_rope_scaling_type = ctypes.c_int32 # enum
+
+# values for enumeration 'llama_pooling_type'
+llama_pooling_type__enumvalues = {
+    -1: 'LLAMA_POOLING_TYPE_UNSPECIFIED',
+    0: 'LLAMA_POOLING_TYPE_NONE',
+    1: 'LLAMA_POOLING_TYPE_MEAN',
+    2: 'LLAMA_POOLING_TYPE_CLS',
+    3: 'LLAMA_POOLING_TYPE_LAST',
+    4: 'LLAMA_POOLING_TYPE_RANK',
+}
+LLAMA_POOLING_TYPE_UNSPECIFIED = -1
+LLAMA_POOLING_TYPE_NONE = 0
+LLAMA_POOLING_TYPE_MEAN = 1
+LLAMA_POOLING_TYPE_CLS = 2
+LLAMA_POOLING_TYPE_LAST = 3
+LLAMA_POOLING_TYPE_RANK = 4
+llama_pooling_type = ctypes.c_int32 # enum
+
+# values for enumeration 'llama_attention_type'
+llama_attention_type__enumvalues = {
+    -1: 'LLAMA_ATTENTION_TYPE_UNSPECIFIED',
+    0: 'LLAMA_ATTENTION_TYPE_CAUSAL',
+    1: 'LLAMA_ATTENTION_TYPE_NON_CAUSAL',
+}
+LLAMA_ATTENTION_TYPE_UNSPECIFIED = -1
+LLAMA_ATTENTION_TYPE_CAUSAL = 0
+LLAMA_ATTENTION_TYPE_NON_CAUSAL = 1
+llama_attention_type = ctypes.c_int32 # enum
+
+# values for enumeration 'llama_split_mode'
+llama_split_mode__enumvalues = {
+    0: 'LLAMA_SPLIT_MODE_NONE',
+    1: 'LLAMA_SPLIT_MODE_LAYER',
+    2: 'LLAMA_SPLIT_MODE_ROW',
+}
+LLAMA_SPLIT_MODE_NONE = 0
+LLAMA_SPLIT_MODE_LAYER = 1
+LLAMA_SPLIT_MODE_ROW = 2
+llama_split_mode = ctypes.c_uint32 # enum
+class struct_llama_token_data(Structure):
+    if TYPE_CHECKING:
+        id: ctypes.c_int32
+        logit: ctypes.c_float
+        p: ctypes.c_float
+struct_llama_token_data._pack_ = 1 # source:False
+struct_llama_token_data._fields_ = [
+    ('id', ctypes.c_int32),
+    ('logit', ctypes.c_float),
+    ('p', ctypes.c_float),
+]
+
+llama_token_data = struct_llama_token_data
+class struct_llama_token_data_array(Structure):
+    if TYPE_CHECKING:
+        data: ctypes._Pointer[struct_llama_token_data]
+        size: ctypes.c_uint64
+        selected: ctypes.c_int64
+        sorted: ctypes.c_bool
+struct_llama_token_data_array._pack_ = 1 # source:False
+struct_llama_token_data_array._fields_ = [
+    ('data', ctypes.POINTER(struct_llama_token_data)),
+    ('size', ctypes.c_uint64),
+    ('selected', ctypes.c_int64),
+    ('sorted', ctypes.c_bool),
+    ('PADDING_0', ctypes.c_ubyte * 7),
+]
+
+llama_token_data_array = struct_llama_token_data_array
+llama_progress_callback = ctypes.CFUNCTYPE(ctypes.c_bool, ctypes.c_float, ctypes.POINTER(None))
+class struct_llama_batch(Structure):
+    if TYPE_CHECKING:
+        n_tokens: ctypes.c_int32
+        token: ctypes._Pointer[ctypes.c_int32]
+        embd: ctypes._Pointer[ctypes.c_float]
+        pos: ctypes._Pointer[ctypes.c_int32]
+        n_seq_id: ctypes._Pointer[ctypes.c_int32]
+        seq_id: ctypes._Pointer[ctypes._Pointer[ctypes.c_int32]]
+        logits: ctypes._Pointer[ctypes.c_byte]
+struct_llama_batch._pack_ = 1 # source:False
+struct_llama_batch._fields_ = [
+    ('n_tokens', ctypes.c_int32),
+    ('PADDING_0', ctypes.c_ubyte * 4),
+    ('token', ctypes.POINTER(ctypes.c_int32)),
+    ('embd', ctypes.POINTER(ctypes.c_float)),
+    ('pos', ctypes.POINTER(ctypes.c_int32)),
+    ('n_seq_id', ctypes.POINTER(ctypes.c_int32)),
+    ('seq_id', ctypes.POINTER(ctypes.POINTER(ctypes.c_int32))),
+    ('logits', ctypes.POINTER(ctypes.c_byte)),
+]
+
+llama_batch = struct_llama_batch
+
+# values for enumeration 'llama_model_kv_override_type'
+llama_model_kv_override_type__enumvalues = {
+    0: 'LLAMA_KV_OVERRIDE_TYPE_INT',
+    1: 'LLAMA_KV_OVERRIDE_TYPE_FLOAT',
+    2: 'LLAMA_KV_OVERRIDE_TYPE_BOOL',
+    3: 'LLAMA_KV_OVERRIDE_TYPE_STR',
+}
+LLAMA_KV_OVERRIDE_TYPE_INT = 0
+LLAMA_KV_OVERRIDE_TYPE_FLOAT = 1
+LLAMA_KV_OVERRIDE_TYPE_BOOL = 2
+LLAMA_KV_OVERRIDE_TYPE_STR = 3
+llama_model_kv_override_type = ctypes.c_uint32 # enum
+class struct_llama_model_kv_override(Structure):
+    if TYPE_CHECKING:
+        tag: llama_model_kv_override_type
+        key: ctypes.Array[ctypes.c_char]
+        anonymous_union: union_llama_model_kv_override_0
+class union_llama_model_kv_override_0(Union):
+    if TYPE_CHECKING:
+        val_i64: ctypes.c_int64
+        val_f64: ctypes.c_double
+        val_bool: ctypes.c_bool
+        val_str: ctypes.Array[ctypes.c_char]
+union_llama_model_kv_override_0._pack_ = 1 # source:False
+union_llama_model_kv_override_0._fields_ = [
+    ('val_i64', ctypes.c_int64),
+    ('val_f64', ctypes.c_double),
+    ('val_bool', ctypes.c_bool),
+    ('val_str', ctypes.c_char * 128),
+]
+
+struct_llama_model_kv_override._pack_ = 1 # source:False
+struct_llama_model_kv_override._anonymous_ = ('_0',)
+struct_llama_model_kv_override._fields_ = [
+    ('tag', llama_model_kv_override_type),
+    ('key', ctypes.c_char * 128),
+    ('PADDING_0', ctypes.c_ubyte * 4),
+    ('_0', union_llama_model_kv_override_0),
+]
+
+class struct_llama_model_tensor_buft_override(Structure):
+    if TYPE_CHECKING:
+        pattern: ctypes._Pointer[ctypes.c_char]
+        buft: ctypes._Pointer[struct_ggml_backend_buffer_type]
+struct_llama_model_tensor_buft_override._pack_ = 1 # source:False
+struct_llama_model_tensor_buft_override._fields_ = [
+    ('pattern', ctypes.POINTER(ctypes.c_char)),
+    ('buft', ctypes.POINTER(struct_ggml_backend_buffer_type)),
+]
+
+class struct_llama_model_params(Structure):
+    if TYPE_CHECKING:
+        devices: ctypes._Pointer[ctypes._Pointer[struct_ggml_backend_device]]
+        tensor_buft_overrides: ctypes._Pointer[struct_llama_model_tensor_buft_override]
+        n_gpu_layers: ctypes.c_int32
+        split_mode: llama_split_mode
+        main_gpu: ctypes.c_int32
+        tensor_split: ctypes._Pointer[ctypes.c_float]
+        progress_callback: Callable[[ctypes.c_float, ctypes.c_void_p], ctypes.c_bool]
+        progress_callback_user_data: ctypes.c_void_p
+        kv_overrides: ctypes._Pointer[struct_llama_model_kv_override]
+        vocab_only: ctypes.c_bool
+        use_mmap: ctypes.c_bool
+        use_mlock: ctypes.c_bool
+        check_tensors: ctypes.c_bool
+struct_llama_model_params._pack_ = 1 # source:False
+struct_llama_model_params._fields_ = [
+    ('devices', ctypes.POINTER(ctypes.POINTER(struct_ggml_backend_device))),
+    ('tensor_buft_overrides', ctypes.POINTER(struct_llama_model_tensor_buft_override)),
+    ('n_gpu_layers', ctypes.c_int32),
+    ('split_mode', llama_split_mode),
+    ('main_gpu', ctypes.c_int32),
+    ('PADDING_0', ctypes.c_ubyte * 4),
+    ('tensor_split', ctypes.POINTER(ctypes.c_float)),
+    ('progress_callback', ctypes.CFUNCTYPE(ctypes.c_bool, ctypes.c_float, ctypes.POINTER(None))),
+    ('progress_callback_user_data', ctypes.POINTER(None)),
+    ('kv_overrides', ctypes.POINTER(struct_llama_model_kv_override)),
+    ('vocab_only', ctypes.c_bool),
+    ('use_mmap', ctypes.c_bool),
+    ('use_mlock', ctypes.c_bool),
+    ('check_tensors', ctypes.c_bool),
+    ('PADDING_1', ctypes.c_ubyte * 4),
+]
+
+class struct_llama_context_params(Structure):
+    if TYPE_CHECKING:
+        n_ctx: ctypes.c_uint32
+        n_batch: ctypes.c_uint32
+        n_ubatch: ctypes.c_uint32
+        n_seq_max: ctypes.c_uint32
+        n_threads: ctypes.c_int32
+        n_threads_batch: ctypes.c_int32
+        rope_scaling_type: llama_rope_scaling_type
+        pooling_type: llama_pooling_type
+        attention_type: llama_attention_type
+        rope_freq_base: ctypes.c_float
+        rope_freq_scale: ctypes.c_float
+        yarn_ext_factor: ctypes.c_float
+        yarn_attn_factor: ctypes.c_float
+        yarn_beta_fast: ctypes.c_float
+        yarn_beta_slow: ctypes.c_float
+        yarn_orig_ctx: ctypes.c_uint32
+        defrag_thold: ctypes.c_float
+        cb_eval: Callable[[ctypes._Pointer[struct_ggml_tensor], ctypes.c_bool, ctypes.c_void_p], ctypes.c_bool]
+        cb_eval_user_data: ctypes.c_void_p
+        type_k: ggml_type
+        type_v: ggml_type
+        abort_callback: Callable[[ctypes.c_void_p], ctypes.c_bool]
+        abort_callback_data: ctypes.c_void_p
+        embeddings: ctypes.c_bool
+        offload_kqv: ctypes.c_bool
+        flash_attn: ctypes.c_bool
+        no_perf: ctypes.c_bool
+        op_offload: ctypes.c_bool
+        swa_full: ctypes.c_bool
+struct_llama_context_params._pack_ = 1 # source:False
+struct_llama_context_params._fields_ = [
+    ('n_ctx', ctypes.c_uint32),
+    ('n_batch', ctypes.c_uint32),
+    ('n_ubatch', ctypes.c_uint32),
+    ('n_seq_max', ctypes.c_uint32),
+    ('n_threads', ctypes.c_int32),
+    ('n_threads_batch', ctypes.c_int32),
+    ('rope_scaling_type', llama_rope_scaling_type),
+    ('pooling_type', llama_pooling_type),
+    ('attention_type', llama_attention_type),
+    ('rope_freq_base', ctypes.c_float),
+    ('rope_freq_scale', ctypes.c_float),
+    ('yarn_ext_factor', ctypes.c_float),
+    ('yarn_attn_factor', ctypes.c_float),
+    ('yarn_beta_fast', ctypes.c_float),
+    ('yarn_beta_slow', ctypes.c_float),
+    ('yarn_orig_ctx', ctypes.c_uint32),
+    ('defrag_thold', ctypes.c_float),
+    ('PADDING_0', ctypes.c_ubyte * 4),
+    ('cb_eval', ctypes.CFUNCTYPE(ctypes.c_bool, ctypes.POINTER(struct_ggml_tensor), ctypes.c_bool, ctypes.POINTER(None))),
+    ('cb_eval_user_data', ctypes.POINTER(None)),
+    ('type_k', ggml_type),
+    ('type_v', ggml_type),
+    ('abort_callback', ctypes.CFUNCTYPE(ctypes.c_bool, ctypes.POINTER(None))),
+    ('abort_callback_data', ctypes.POINTER(None)),
+    ('embeddings', ctypes.c_bool),
+    ('offload_kqv', ctypes.c_bool),
+    ('flash_attn', ctypes.c_bool),
+    ('no_perf', ctypes.c_bool),
+    ('op_offload', ctypes.c_bool),
+    ('swa_full', ctypes.c_bool),
+    ('PADDING_1', ctypes.c_ubyte * 2),
+]
+
+class struct_llama_model_quantize_params(Structure):
+    if TYPE_CHECKING:
+        nthread: ctypes.c_int32
+        ftype: llama_ftype
+        output_tensor_type: ggml_type
+        token_embedding_type: ggml_type
+        allow_requantize: ctypes.c_bool
+        quantize_output_tensor: ctypes.c_bool
+        only_copy: ctypes.c_bool
+        pure: ctypes.c_bool
+        keep_split: ctypes.c_bool
+        imatrix: ctypes.c_void_p
+        kv_overrides: ctypes.c_void_p
+        tensor_types: ctypes.c_void_p
+struct_llama_model_quantize_params._pack_ = 1 # source:False
+struct_llama_model_quantize_params._fields_ = [
+    ('nthread', ctypes.c_int32),
+    ('ftype', llama_ftype),
+    ('output_tensor_type', ggml_type),
+    ('token_embedding_type', ggml_type),
+    ('allow_requantize', ctypes.c_bool),
+    ('quantize_output_tensor', ctypes.c_bool),
+    ('only_copy', ctypes.c_bool),
+    ('pure', ctypes.c_bool),
+    ('keep_split', ctypes.c_bool),
+    ('PADDING_0', ctypes.c_ubyte * 3),
+    ('imatrix', ctypes.POINTER(None)),
+    ('kv_overrides', ctypes.POINTER(None)),
+    ('tensor_types', ctypes.POINTER(None)),
+]
+
+llama_model_quantize_params = struct_llama_model_quantize_params
+class struct_llama_logit_bias(Structure):
+    if TYPE_CHECKING:
+        token: ctypes.c_int32
+        bias: ctypes.c_float
+struct_llama_logit_bias._pack_ = 1 # source:False
+struct_llama_logit_bias._fields_ = [
+    ('token', ctypes.c_int32),
+    ('bias', ctypes.c_float),
+]
+
+llama_logit_bias = struct_llama_logit_bias
+class struct_llama_sampler_chain_params(Structure):
+    if TYPE_CHECKING:
+        no_perf: ctypes.c_bool
+struct_llama_sampler_chain_params._pack_ = 1 # source:False
+struct_llama_sampler_chain_params._fields_ = [
+    ('no_perf', ctypes.c_bool),
+]
+
+llama_sampler_chain_params = struct_llama_sampler_chain_params
+class struct_llama_chat_message(Structure):
+    if TYPE_CHECKING:
+        role: ctypes._Pointer[ctypes.c_char]
+        content: ctypes._Pointer[ctypes.c_char]
+struct_llama_chat_message._pack_ = 1 # source:False
+struct_llama_chat_message._fields_ = [
+    ('role', ctypes.POINTER(ctypes.c_char)),
+    ('content', ctypes.POINTER(ctypes.c_char)),
+]
+
+llama_chat_message = struct_llama_chat_message
+class struct_llama_adapter_lora(Structure):
+    pass
+
+@ctypes_function_for_shared_library('FIXME_STUB')("llama_model_default_params", [], struct_llama_model_params)
+def llama_model_default_params() -> struct_llama_model_params:
+    ...
+
+@ctypes_function_for_shared_library('FIXME_STUB')("llama_context_default_params", [], struct_llama_context_params)
+def llama_context_default_params() -> struct_llama_context_params:
+    ...
+
+@ctypes_function_for_shared_library('FIXME_STUB')("llama_sampler_chain_default_params", [], struct_llama_sampler_chain_params)
+def llama_sampler_chain_default_params() -> struct_llama_sampler_chain_params:
+    ...
+
+@ctypes_function_for_shared_library('FIXME_STUB')("llama_model_quantize_default_params", [], struct_llama_model_quantize_params)
+def llama_model_quantize_default_params() -> struct_llama_model_quantize_params:
+    ...
+
+@ctypes_function_for_shared_library('FIXME_STUB')("llama_backend_init", [], None)
+def llama_backend_init() -> None:
+    ...
+
+@ctypes_function_for_shared_library('FIXME_STUB')("llama_backend_free", [], None)
+def llama_backend_free() -> None:
+    ...
+
+@ctypes_function_for_shared_library('FIXME_STUB')("llama_numa_init", [ggml_numa_strategy], None)
+def llama_numa_init(numa: ggml_numa_strategy) -> None:
+    ...
+
+@ctypes_function_for_shared_library('FIXME_STUB')("llama_attach_threadpool", [ctypes.POINTER(struct_llama_context), ggml_threadpool_t, ggml_threadpool_t], None)
+def llama_attach_threadpool(ctx: ctypes._Pointer[struct_llama_context], threadpool: ggml_threadpool_t, threadpool_batch: ggml_threadpool_t) -> None:
+    ...
+
+@ctypes_function_for_shared_library('FIXME_STUB')("llama_detach_threadpool", [ctypes.POINTER(struct_llama_context)], None)
+def llama_detach_threadpool(ctx: ctypes._Pointer[struct_llama_context]) -> None:
+    ...
+
+@ctypes_function_for_shared_library('FIXME_STUB')("llama_load_model_from_file", [ctypes.POINTER(ctypes.c_char), struct_llama_model_params], ctypes.POINTER(struct_llama_model))
+def llama_load_model_from_file(path_model: ctypes._Pointer[ctypes.c_char], params: struct_llama_model_params) -> ctypes._Pointer[struct_llama_model]:
+    ...
+
+@ctypes_function_for_shared_library('FIXME_STUB')("llama_model_load_from_file", [ctypes.POINTER(ctypes.c_char), struct_llama_model_params], ctypes.POINTER(struct_llama_model))
+def llama_model_load_from_file(path_model: ctypes._Pointer[ctypes.c_char], params: struct_llama_model_params) -> ctypes._Pointer[struct_llama_model]:
+    ...
+
+@ctypes_function_for_shared_library('FIXME_STUB')("llama_model_load_from_splits", [ctypes.POINTER(ctypes.POINTER(ctypes.c_char)), size_t, struct_llama_model_params], ctypes.POINTER(struct_llama_model))
+def llama_model_load_from_splits(paths: ctypes._Pointer[ctypes._Pointer[ctypes.c_char]], n_paths: size_t, params: struct_llama_model_params) -> ctypes._Pointer[struct_llama_model]:
+    ...
+
+@ctypes_function_for_shared_library('FIXME_STUB')("llama_model_save_to_file", [ctypes.POINTER(struct_llama_model), ctypes.POINTER(ctypes.c_char)], None)
+def llama_model_save_to_file(model: ctypes._Pointer[struct_llama_model], path_model: ctypes._Pointer[ctypes.c_char]) -> None:
+    ...
+
+@ctypes_function_for_shared_library('FIXME_STUB')("llama_free_model", [ctypes.POINTER(struct_llama_model)], None)
+def llama_free_model(model: ctypes._Pointer[struct_llama_model]) -> None:
+    ...
+
+@ctypes_function_for_shared_library('FIXME_STUB')("llama_model_free", [ctypes.POINTER(struct_llama_model)], None)
+def llama_model_free(model: ctypes._Pointer[struct_llama_model]) -> None:
+    ...
+
+@ctypes_function_for_shared_library('FIXME_STUB')("llama_init_from_model", [ctypes.POINTER(struct_llama_model), struct_llama_context_params], ctypes.POINTER(struct_llama_context))
+def llama_init_from_model(model: ctypes._Pointer[struct_llama_model], params: struct_llama_context_params) -> ctypes._Pointer[struct_llama_context]:
+    ...
+
+@ctypes_function_for_shared_library('FIXME_STUB')("llama_new_context_with_model", [ctypes.POINTER(struct_llama_model), struct_llama_context_params], ctypes.POINTER(struct_llama_context))
+def llama_new_context_with_model(model: ctypes._Pointer[struct_llama_model], params: struct_llama_context_params) -> ctypes._Pointer[struct_llama_context]:
+    ...
+
+@ctypes_function_for_shared_library('FIXME_STUB')("llama_free", [ctypes.POINTER(struct_llama_context)], None)
+def llama_free(ctx: ctypes._Pointer[struct_llama_context]) -> None:
+    ...
+
+@ctypes_function_for_shared_library('FIXME_STUB')("llama_time_us", [], int64_t)
+def llama_time_us() -> int64_t:
+    ...
+
+@ctypes_function_for_shared_library('FIXME_STUB')("llama_max_devices", [], size_t)
+def llama_max_devices() -> size_t:
+    ...
+
+@ctypes_function_for_shared_library('FIXME_STUB')("llama_max_parallel_sequences", [], size_t)
+def llama_max_parallel_sequences() -> size_t:
+    ...
+
+@ctypes_function_for_shared_library('FIXME_STUB')("llama_supports_mmap", [], ctypes.c_bool)
+def llama_supports_mmap() -> ctypes.c_bool:
+    ...
+
+@ctypes_function_for_shared_library('FIXME_STUB')("llama_supports_mlock", [], ctypes.c_bool)
+def llama_supports_mlock() -> ctypes.c_bool:
+    ...
+
+@ctypes_function_for_shared_library('FIXME_STUB')("llama_supports_gpu_offload", [], ctypes.c_bool)
+def llama_supports_gpu_offload() -> ctypes.c_bool:
+    ...
+
+@ctypes_function_for_shared_library('FIXME_STUB')("llama_supports_rpc", [], ctypes.c_bool)
+def llama_supports_rpc() -> ctypes.c_bool:
+    ...
+
+uint32_t = ctypes.c_uint32
+@ctypes_function_for_shared_library('FIXME_STUB')("llama_n_ctx", [ctypes.POINTER(struct_llama_context)], uint32_t)
+def llama_n_ctx(ctx: ctypes._Pointer[struct_llama_context]) -> uint32_t:
+    ...
+
+@ctypes_function_for_shared_library('FIXME_STUB')("llama_n_batch", [ctypes.POINTER(struct_llama_context)], uint32_t)
+def llama_n_batch(ctx: ctypes._Pointer[struct_llama_context]) -> uint32_t:
+    ...
+
+@ctypes_function_for_shared_library('FIXME_STUB')("llama_n_ubatch", [ctypes.POINTER(struct_llama_context)], uint32_t)
+def llama_n_ubatch(ctx: ctypes._Pointer[struct_llama_context]) -> uint32_t:
+    ...
+
+@ctypes_function_for_shared_library('FIXME_STUB')("llama_n_seq_max", [ctypes.POINTER(struct_llama_context)], uint32_t)
+def llama_n_seq_max(ctx: ctypes._Pointer[struct_llama_context]) -> uint32_t:
+    ...
+
+@ctypes_function_for_shared_library('FIXME_STUB')("llama_n_ctx_train", [ctypes.POINTER(struct_llama_model)], int32_t)
+def llama_n_ctx_train(model: ctypes._Pointer[struct_llama_model]) -> int32_t:
+    ...
+
+@ctypes_function_for_shared_library('FIXME_STUB')("llama_n_embd", [ctypes.POINTER(struct_llama_model)], int32_t)
+def llama_n_embd(model: ctypes._Pointer[struct_llama_model]) -> int32_t:
+    ...
+
+@ctypes_function_for_shared_library('FIXME_STUB')("llama_n_layer", [ctypes.POINTER(struct_llama_model)], int32_t)
+def llama_n_layer(model: ctypes._Pointer[struct_llama_model]) -> int32_t:
+    ...
+
+@ctypes_function_for_shared_library('FIXME_STUB')("llama_n_head", [ctypes.POINTER(struct_llama_model)], int32_t)
+def llama_n_head(model: ctypes._Pointer[struct_llama_model]) -> int32_t:
+    ...
+
+@ctypes_function_for_shared_library('FIXME_STUB')("llama_n_vocab", [ctypes.POINTER(struct_llama_vocab)], int32_t)
+def llama_n_vocab(vocab: ctypes._Pointer[struct_llama_vocab]) -> int32_t:
+    ...
+
+@ctypes_function_for_shared_library('FIXME_STUB')("llama_get_model", [ctypes.POINTER(struct_llama_context)], ctypes.POINTER(struct_llama_model))
+def llama_get_model(ctx: ctypes._Pointer[struct_llama_context]) -> ctypes._Pointer[struct_llama_model]:
+    ...
+
+@ctypes_function_for_shared_library('FIXME_STUB')("llama_get_kv_self", [ctypes.POINTER(struct_llama_context)], ctypes.POINTER(struct_llama_kv_cache))
+def llama_get_kv_self(ctx: ctypes._Pointer[struct_llama_context]) -> ctypes._Pointer[struct_llama_kv_cache]:
+    ...
+
+@ctypes_function_for_shared_library('FIXME_STUB')("llama_model_get_vocab", [ctypes.POINTER(struct_llama_model)], ctypes.POINTER(struct_llama_vocab))
+def llama_model_get_vocab(model: ctypes._Pointer[struct_llama_model]) -> ctypes._Pointer[struct_llama_vocab]:
+    ...
+
+@ctypes_function_for_shared_library('FIXME_STUB')("llama_model_rope_type", [ctypes.POINTER(struct_llama_model)], llama_rope_type)
+def llama_model_rope_type(model: ctypes._Pointer[struct_llama_model]) -> llama_rope_type:
+    ...
+
+@ctypes_function_for_shared_library('FIXME_STUB')("llama_model_n_ctx_train", [ctypes.POINTER(struct_llama_model)], int32_t)
+def llama_model_n_ctx_train(model: ctypes._Pointer[struct_llama_model]) -> int32_t:
+    ...
+
+@ctypes_function_for_shared_library('FIXME_STUB')("llama_model_n_embd", [ctypes.POINTER(struct_llama_model)], int32_t)
+def llama_model_n_embd(model: ctypes._Pointer[struct_llama_model]) -> int32_t:
+    ...
+
+@ctypes_function_for_shared_library('FIXME_STUB')("llama_model_n_layer", [ctypes.POINTER(struct_llama_model)], int32_t)
+def llama_model_n_layer(model: ctypes._Pointer[struct_llama_model]) -> int32_t:
+    ...
+
+@ctypes_function_for_shared_library('FIXME_STUB')("llama_model_n_head", [ctypes.POINTER(struct_llama_model)], int32_t)
+def llama_model_n_head(model: ctypes._Pointer[struct_llama_model]) -> int32_t:
+    ...
+
+@ctypes_function_for_shared_library('FIXME_STUB')("llama_model_n_head_kv", [ctypes.POINTER(struct_llama_model)], int32_t)
+def llama_model_n_head_kv(model: ctypes._Pointer[struct_llama_model]) -> int32_t:
+    ...
+
+@ctypes_function_for_shared_library('FIXME_STUB')("llama_model_rope_freq_scale_train", [ctypes.POINTER(struct_llama_model)], ctypes.c_float)
+def llama_model_rope_freq_scale_train(model: ctypes._Pointer[struct_llama_model]) -> ctypes.c_float:
+    ...
+
+@ctypes_function_for_shared_library('FIXME_STUB')("llama_vocab_n_tokens", [ctypes.POINTER(struct_llama_vocab)], int32_t)
+def llama_vocab_n_tokens(vocab: ctypes._Pointer[struct_llama_vocab]) -> int32_t:
+    ...
+
+@ctypes_function_for_shared_library('FIXME_STUB')("llama_model_meta_val_str", [ctypes.POINTER(struct_llama_model), ctypes.POINTER(ctypes.c_char), ctypes.POINTER(ctypes.c_char), size_t], int32_t)
+def llama_model_meta_val_str(model: ctypes._Pointer[struct_llama_model], key: ctypes._Pointer[ctypes.c_char], buf: ctypes._Pointer[ctypes.c_char], buf_size: size_t) -> int32_t:
+    ...
+
+@ctypes_function_for_shared_library('FIXME_STUB')("llama_model_meta_count", [ctypes.POINTER(struct_llama_model)], int32_t)
+def llama_model_meta_count(model: ctypes._Pointer[struct_llama_model]) -> int32_t:
+    ...
+
+@ctypes_function_for_shared_library('FIXME_STUB')("llama_model_meta_key_by_index", [ctypes.POINTER(struct_llama_model), int32_t, ctypes.POINTER(ctypes.c_char), size_t], int32_t)
+def llama_model_meta_key_by_index(model: ctypes._Pointer[struct_llama_model], i: int32_t, buf: ctypes._Pointer[ctypes.c_char], buf_size: size_t) -> int32_t:
+    ...
+
+@ctypes_function_for_shared_library('FIXME_STUB')("llama_model_meta_val_str_by_index", [ctypes.POINTER(struct_llama_model), int32_t, ctypes.POINTER(ctypes.c_char), size_t], int32_t)
+def llama_model_meta_val_str_by_index(model: ctypes._Pointer[struct_llama_model], i: int32_t, buf: ctypes._Pointer[ctypes.c_char], buf_size: size_t) -> int32_t:
+    ...
+
+@ctypes_function_for_shared_library('FIXME_STUB')("llama_model_desc", [ctypes.POINTER(struct_llama_model), ctypes.POINTER(ctypes.c_char), size_t], int32_t)
+def llama_model_desc(model: ctypes._Pointer[struct_llama_model], buf: ctypes._Pointer[ctypes.c_char], buf_size: size_t) -> int32_t:
+    ...
+
+uint64_t = ctypes.c_uint64
+@ctypes_function_for_shared_library('FIXME_STUB')("llama_model_size", [ctypes.POINTER(struct_llama_model)], uint64_t)
+def llama_model_size(model: ctypes._Pointer[struct_llama_model]) -> uint64_t:
+    ...
+
+@ctypes_function_for_shared_library('FIXME_STUB')("llama_model_chat_template", [ctypes.POINTER(struct_llama_model), ctypes.POINTER(ctypes.c_char)], ctypes.POINTER(ctypes.c_char))
+def llama_model_chat_template(model: ctypes._Pointer[struct_llama_model], name: ctypes._Pointer[ctypes.c_char]) -> ctypes._Pointer[ctypes.c_char]:
+    ...
+
+@ctypes_function_for_shared_library('FIXME_STUB')("llama_model_n_params", [ctypes.POINTER(struct_llama_model)], uint64_t)
+def llama_model_n_params(model: ctypes._Pointer[struct_llama_model]) -> uint64_t:
+    ...
+
+@ctypes_function_for_shared_library('FIXME_STUB')("llama_model_has_encoder", [ctypes.POINTER(struct_llama_model)], ctypes.c_bool)
+def llama_model_has_encoder(model: ctypes._Pointer[struct_llama_model]) -> ctypes.c_bool:
+    ...
+
+@ctypes_function_for_shared_library('FIXME_STUB')("llama_model_has_decoder", [ctypes.POINTER(struct_llama_model)], ctypes.c_bool)
+def llama_model_has_decoder(model: ctypes._Pointer[struct_llama_model]) -> ctypes.c_bool:
+    ...
+
+@ctypes_function_for_shared_library('FIXME_STUB')("llama_model_decoder_start_token", [ctypes.POINTER(struct_llama_model)], llama_token)
+def llama_model_decoder_start_token(model: ctypes._Pointer[struct_llama_model]) -> llama_token:
+    ...
+
+@ctypes_function_for_shared_library('FIXME_STUB')("llama_model_is_recurrent", [ctypes.POINTER(struct_llama_model)], ctypes.c_bool)
+def llama_model_is_recurrent(model: ctypes._Pointer[struct_llama_model]) -> ctypes.c_bool:
+    ...
+
+@ctypes_function_for_shared_library('FIXME_STUB')("llama_model_quantize", [ctypes.POINTER(ctypes.c_char), ctypes.POINTER(ctypes.c_char), ctypes.POINTER(struct_llama_model_quantize_params)], uint32_t)
+def llama_model_quantize(fname_inp: ctypes._Pointer[ctypes.c_char], fname_out: ctypes._Pointer[ctypes.c_char], params: ctypes._Pointer[struct_llama_model_quantize_params]) -> uint32_t:
+    ...
+
+@ctypes_function_for_shared_library('FIXME_STUB')("llama_adapter_lora_init", [ctypes.POINTER(struct_llama_model), ctypes.POINTER(ctypes.c_char)], ctypes.POINTER(struct_llama_adapter_lora))
+def llama_adapter_lora_init(model: ctypes._Pointer[struct_llama_model], path_lora: ctypes._Pointer[ctypes.c_char]) -> ctypes._Pointer[struct_llama_adapter_lora]:
+    ...
+
+@ctypes_function_for_shared_library('FIXME_STUB')("llama_adapter_lora_free", [ctypes.POINTER(struct_llama_adapter_lora)], None)
+def llama_adapter_lora_free(adapter: ctypes._Pointer[struct_llama_adapter_lora]) -> None:
+    ...
+
+@ctypes_function_for_shared_library('FIXME_STUB')("llama_set_adapter_lora", [ctypes.POINTER(struct_llama_context), ctypes.POINTER(struct_llama_adapter_lora), ctypes.c_float], int32_t)
+def llama_set_adapter_lora(ctx: ctypes._Pointer[struct_llama_context], adapter: ctypes._Pointer[struct_llama_adapter_lora], scale: ctypes.c_float) -> int32_t:
+    ...
+
+@ctypes_function_for_shared_library('FIXME_STUB')("llama_rm_adapter_lora", [ctypes.POINTER(struct_llama_context), ctypes.POINTER(struct_llama_adapter_lora)], int32_t)
+def llama_rm_adapter_lora(ctx: ctypes._Pointer[struct_llama_context], adapter: ctypes._Pointer[struct_llama_adapter_lora]) -> int32_t:
+    ...
+
+@ctypes_function_for_shared_library('FIXME_STUB')("llama_clear_adapter_lora", [ctypes.POINTER(struct_llama_context)], None)
+def llama_clear_adapter_lora(ctx: ctypes._Pointer[struct_llama_context]) -> None:
+    ...
+
+@ctypes_function_for_shared_library('FIXME_STUB')("llama_apply_adapter_cvec", [ctypes.POINTER(struct_llama_context), ctypes.POINTER(ctypes.c_float), size_t, int32_t, int32_t, int32_t], int32_t)
+def llama_apply_adapter_cvec(ctx: ctypes._Pointer[struct_llama_context], data: ctypes._Pointer[ctypes.c_float], len: size_t, n_embd: int32_t, il_start: int32_t, il_end: int32_t) -> int32_t:
+    ...
+
+@ctypes_function_for_shared_library('FIXME_STUB')("llama_kv_self_n_tokens", [ctypes.POINTER(struct_llama_context)], int32_t)
+def llama_kv_self_n_tokens(ctx: ctypes._Pointer[struct_llama_context]) -> int32_t:
+    ...
+
+@ctypes_function_for_shared_library('FIXME_STUB')("llama_kv_self_used_cells", [ctypes.POINTER(struct_llama_context)], int32_t)
+def llama_kv_self_used_cells(ctx: ctypes._Pointer[struct_llama_context]) -> int32_t:
+    ...
+
+@ctypes_function_for_shared_library('FIXME_STUB')("llama_kv_self_clear", [ctypes.POINTER(struct_llama_context)], None)
+def llama_kv_self_clear(ctx: ctypes._Pointer[struct_llama_context]) -> None:
+    ...
+
+@ctypes_function_for_shared_library('FIXME_STUB')("llama_kv_self_seq_rm", [ctypes.POINTER(struct_llama_context), llama_seq_id, llama_pos, llama_pos], ctypes.c_bool)
+def llama_kv_self_seq_rm(ctx: ctypes._Pointer[struct_llama_context], seq_id: llama_seq_id, p0: llama_pos, p1: llama_pos) -> ctypes.c_bool:
+    ...
+
+@ctypes_function_for_shared_library('FIXME_STUB')("llama_kv_self_seq_cp", [ctypes.POINTER(struct_llama_context), llama_seq_id, llama_seq_id, llama_pos, llama_pos], None)
+def llama_kv_self_seq_cp(ctx: ctypes._Pointer[struct_llama_context], seq_id_src: llama_seq_id, seq_id_dst: llama_seq_id, p0: llama_pos, p1: llama_pos) -> None:
+    ...
+
+@ctypes_function_for_shared_library('FIXME_STUB')("llama_kv_self_seq_keep", [ctypes.POINTER(struct_llama_context), llama_seq_id], None)
+def llama_kv_self_seq_keep(ctx: ctypes._Pointer[struct_llama_context], seq_id: llama_seq_id) -> None:
+    ...
+
+@ctypes_function_for_shared_library('FIXME_STUB')("llama_kv_self_seq_add", [ctypes.POINTER(struct_llama_context), llama_seq_id, llama_pos, llama_pos, llama_pos], None)
+def llama_kv_self_seq_add(ctx: ctypes._Pointer[struct_llama_context], seq_id: llama_seq_id, p0: llama_pos, p1: llama_pos, delta: llama_pos) -> None:
+    ...
+
+@ctypes_function_for_shared_library('FIXME_STUB')("llama_kv_self_seq_div", [ctypes.POINTER(struct_llama_context), llama_seq_id, llama_pos, llama_pos, ctypes.c_int32], None)
+def llama_kv_self_seq_div(ctx: ctypes._Pointer[struct_llama_context], seq_id: llama_seq_id, p0: llama_pos, p1: llama_pos, d: ctypes.c_int32) -> None:
+    ...
+
+@ctypes_function_for_shared_library('FIXME_STUB')("llama_kv_self_seq_pos_min", [ctypes.POINTER(struct_llama_context), llama_seq_id], llama_pos)
+def llama_kv_self_seq_pos_min(ctx: ctypes._Pointer[struct_llama_context], seq_id: llama_seq_id) -> llama_pos:
+    ...
+
+@ctypes_function_for_shared_library('FIXME_STUB')("llama_kv_self_seq_pos_max", [ctypes.POINTER(struct_llama_context), llama_seq_id], llama_pos)
+def llama_kv_self_seq_pos_max(ctx: ctypes._Pointer[struct_llama_context], seq_id: llama_seq_id) -> llama_pos:
+    ...
+
+@ctypes_function_for_shared_library('FIXME_STUB')("llama_kv_self_defrag", [ctypes.POINTER(struct_llama_context)], None)
+def llama_kv_self_defrag(ctx: ctypes._Pointer[struct_llama_context]) -> None:
+    ...
+
+@ctypes_function_for_shared_library('FIXME_STUB')("llama_kv_self_can_shift", [ctypes.POINTER(struct_llama_context)], ctypes.c_bool)
+def llama_kv_self_can_shift(ctx: ctypes._Pointer[struct_llama_context]) -> ctypes.c_bool:
+    ...
+
+@ctypes_function_for_shared_library('FIXME_STUB')("llama_kv_self_update", [ctypes.POINTER(struct_llama_context)], None)
+def llama_kv_self_update(ctx: ctypes._Pointer[struct_llama_context]) -> None:
+    ...
+
+@ctypes_function_for_shared_library('FIXME_STUB')("llama_state_get_size", [ctypes.POINTER(struct_llama_context)], size_t)
+def llama_state_get_size(ctx: ctypes._Pointer[struct_llama_context]) -> size_t:
+    ...
+
+@ctypes_function_for_shared_library('FIXME_STUB')("llama_get_state_size", [ctypes.POINTER(struct_llama_context)], size_t)
+def llama_get_state_size(ctx: ctypes._Pointer[struct_llama_context]) -> size_t:
+    ...
+
+@ctypes_function_for_shared_library('FIXME_STUB')("llama_state_get_data", [ctypes.POINTER(struct_llama_context), ctypes.POINTER(ctypes.c_ubyte), size_t], size_t)
+def llama_state_get_data(ctx: ctypes._Pointer[struct_llama_context], dst: ctypes._Pointer[ctypes.c_ubyte], size: size_t) -> size_t:
+    ...
+
+@ctypes_function_for_shared_library('FIXME_STUB')("llama_copy_state_data", [ctypes.POINTER(struct_llama_context), ctypes.POINTER(ctypes.c_ubyte)], size_t)
+def llama_copy_state_data(ctx: ctypes._Pointer[struct_llama_context], dst: ctypes._Pointer[ctypes.c_ubyte]) -> size_t:
+    ...
+
+@ctypes_function_for_shared_library('FIXME_STUB')("llama_state_set_data", [ctypes.POINTER(struct_llama_context), ctypes.POINTER(ctypes.c_ubyte), size_t], size_t)
+def llama_state_set_data(ctx: ctypes._Pointer[struct_llama_context], src: ctypes._Pointer[ctypes.c_ubyte], size: size_t) -> size_t:
+    ...
+
+@ctypes_function_for_shared_library('FIXME_STUB')("llama_set_state_data", [ctypes.POINTER(struct_llama_context), ctypes.POINTER(ctypes.c_ubyte)], size_t)
+def llama_set_state_data(ctx: ctypes._Pointer[struct_llama_context], src: ctypes._Pointer[ctypes.c_ubyte]) -> size_t:
+    ...
+
+@ctypes_function_for_shared_library('FIXME_STUB')("llama_state_load_file", [ctypes.POINTER(struct_llama_context), ctypes.POINTER(ctypes.c_char), ctypes.POINTER(ctypes.c_int32), size_t, ctypes.POINTER(ctypes.c_uint64)], ctypes.c_bool)
+def llama_state_load_file(ctx: ctypes._Pointer[struct_llama_context], path_session: ctypes._Pointer[ctypes.c_char], tokens_out: ctypes._Pointer[ctypes.c_int32], n_token_capacity: size_t, n_token_count_out: ctypes._Pointer[ctypes.c_uint64]) -> ctypes.c_bool:
+    ...
+
+@ctypes_function_for_shared_library('FIXME_STUB')("llama_load_session_file", [ctypes.POINTER(struct_llama_context), ctypes.POINTER(ctypes.c_char), ctypes.POINTER(ctypes.c_int32), size_t, ctypes.POINTER(ctypes.c_uint64)], ctypes.c_bool)
+def llama_load_session_file(ctx: ctypes._Pointer[struct_llama_context], path_session: ctypes._Pointer[ctypes.c_char], tokens_out: ctypes._Pointer[ctypes.c_int32], n_token_capacity: size_t, n_token_count_out: ctypes._Pointer[ctypes.c_uint64]) -> ctypes.c_bool:
+    ...
+
+@ctypes_function_for_shared_library('FIXME_STUB')("llama_state_save_file", [ctypes.POINTER(struct_llama_context), ctypes.POINTER(ctypes.c_char), ctypes.POINTER(ctypes.c_int32), size_t], ctypes.c_bool)
+def llama_state_save_file(ctx: ctypes._Pointer[struct_llama_context], path_session: ctypes._Pointer[ctypes.c_char], tokens: ctypes._Pointer[ctypes.c_int32], n_token_count: size_t) -> ctypes.c_bool:
+    ...
+
+@ctypes_function_for_shared_library('FIXME_STUB')("llama_save_session_file", [ctypes.POINTER(struct_llama_context), ctypes.POINTER(ctypes.c_char), ctypes.POINTER(ctypes.c_int32), size_t], ctypes.c_bool)
+def llama_save_session_file(ctx: ctypes._Pointer[struct_llama_context], path_session: ctypes._Pointer[ctypes.c_char], tokens: ctypes._Pointer[ctypes.c_int32], n_token_count: size_t) -> ctypes.c_bool:
+    ...
+
+@ctypes_function_for_shared_library('FIXME_STUB')("llama_state_seq_get_size", [ctypes.POINTER(struct_llama_context), llama_seq_id], size_t)
+def llama_state_seq_get_size(ctx: ctypes._Pointer[struct_llama_context], seq_id: llama_seq_id) -> size_t:
+    ...
+
+@ctypes_function_for_shared_library('FIXME_STUB')("llama_state_seq_get_data", [ctypes.POINTER(struct_llama_context), ctypes.POINTER(ctypes.c_ubyte), size_t, llama_seq_id], size_t)
+def llama_state_seq_get_data(ctx: ctypes._Pointer[struct_llama_context], dst: ctypes._Pointer[ctypes.c_ubyte], size: size_t, seq_id: llama_seq_id) -> size_t:
+    ...
+
+@ctypes_function_for_shared_library('FIXME_STUB')("llama_state_seq_set_data", [ctypes.POINTER(struct_llama_context), ctypes.POINTER(ctypes.c_ubyte), size_t, llama_seq_id], size_t)
+def llama_state_seq_set_data(ctx: ctypes._Pointer[struct_llama_context], src: ctypes._Pointer[ctypes.c_ubyte], size: size_t, dest_seq_id: llama_seq_id) -> size_t:
+    ...
+
+@ctypes_function_for_shared_library('FIXME_STUB')("llama_state_seq_save_file", [ctypes.POINTER(struct_llama_context), ctypes.POINTER(ctypes.c_char), llama_seq_id, ctypes.POINTER(ctypes.c_int32), size_t], size_t)
+def llama_state_seq_save_file(ctx: ctypes._Pointer[struct_llama_context], filepath: ctypes._Pointer[ctypes.c_char], seq_id: llama_seq_id, tokens: ctypes._Pointer[ctypes.c_int32], n_token_count: size_t) -> size_t:
+    ...
+
+@ctypes_function_for_shared_library('FIXME_STUB')("llama_state_seq_load_file", [ctypes.POINTER(struct_llama_context), ctypes.POINTER(ctypes.c_char), llama_seq_id, ctypes.POINTER(ctypes.c_int32), size_t, ctypes.POINTER(ctypes.c_uint64)], size_t)
+def llama_state_seq_load_file(ctx: ctypes._Pointer[struct_llama_context], filepath: ctypes._Pointer[ctypes.c_char], dest_seq_id: llama_seq_id, tokens_out: ctypes._Pointer[ctypes.c_int32], n_token_capacity: size_t, n_token_count_out: ctypes._Pointer[ctypes.c_uint64]) -> size_t:
+    ...
+
+@ctypes_function_for_shared_library('FIXME_STUB')("llama_batch_get_one", [ctypes.POINTER(ctypes.c_int32), int32_t], struct_llama_batch)
+def llama_batch_get_one(tokens: ctypes._Pointer[ctypes.c_int32], n_tokens: int32_t) -> struct_llama_batch:
+    ...
+
+@ctypes_function_for_shared_library('FIXME_STUB')("llama_batch_init", [int32_t, int32_t, int32_t], struct_llama_batch)
+def llama_batch_init(n_tokens: int32_t, embd: int32_t, n_seq_max: int32_t) -> struct_llama_batch:
+    ...
+
+@ctypes_function_for_shared_library('FIXME_STUB')("llama_batch_free", [struct_llama_batch], None)
+def llama_batch_free(batch: struct_llama_batch) -> None:
+    ...
+
+@ctypes_function_for_shared_library('FIXME_STUB')("llama_encode", [ctypes.POINTER(struct_llama_context), struct_llama_batch], int32_t)
+def llama_encode(ctx: ctypes._Pointer[struct_llama_context], batch: struct_llama_batch) -> int32_t:
+    ...
+
+@ctypes_function_for_shared_library('FIXME_STUB')("llama_decode", [ctypes.POINTER(struct_llama_context), struct_llama_batch], int32_t)
+def llama_decode(ctx: ctypes._Pointer[struct_llama_context], batch: struct_llama_batch) -> int32_t:
+    ...
+
+@ctypes_function_for_shared_library('FIXME_STUB')("llama_set_n_threads", [ctypes.POINTER(struct_llama_context), int32_t, int32_t], None)
+def llama_set_n_threads(ctx: ctypes._Pointer[struct_llama_context], n_threads: int32_t, n_threads_batch: int32_t) -> None:
+    ...
+
+@ctypes_function_for_shared_library('FIXME_STUB')("llama_n_threads", [ctypes.POINTER(struct_llama_context)], int32_t)
+def llama_n_threads(ctx: ctypes._Pointer[struct_llama_context]) -> int32_t:
+    ...
+
+@ctypes_function_for_shared_library('FIXME_STUB')("llama_n_threads_batch", [ctypes.POINTER(struct_llama_context)], int32_t)
+def llama_n_threads_batch(ctx: ctypes._Pointer[struct_llama_context]) -> int32_t:
+    ...
+
+@ctypes_function_for_shared_library('FIXME_STUB')("llama_set_embeddings", [ctypes.POINTER(struct_llama_context), ctypes.c_bool], None)
+def llama_set_embeddings(ctx: ctypes._Pointer[struct_llama_context], embeddings: ctypes.c_bool) -> None:
+    ...
+
+@ctypes_function_for_shared_library('FIXME_STUB')("llama_set_causal_attn", [ctypes.POINTER(struct_llama_context), ctypes.c_bool], None)
+def llama_set_causal_attn(ctx: ctypes._Pointer[struct_llama_context], causal_attn: ctypes.c_bool) -> None:
+    ...
+
+@ctypes_function_for_shared_library('FIXME_STUB')("llama_set_warmup", [ctypes.POINTER(struct_llama_context), ctypes.c_bool], None)
+def llama_set_warmup(ctx: ctypes._Pointer[struct_llama_context], warmup: ctypes.c_bool) -> None:
+    ...
+
+@ctypes_function_for_shared_library('FIXME_STUB')("llama_set_abort_callback", [ctypes.POINTER(struct_llama_context), ggml_abort_callback, ctypes.POINTER(None)], None)
+def llama_set_abort_callback(ctx: ctypes._Pointer[struct_llama_context], abort_callback: ggml_abort_callback, abort_callback_data: ctypes.c_void_p) -> None:
+    ...
+
+@ctypes_function_for_shared_library('FIXME_STUB')("llama_synchronize", [ctypes.POINTER(struct_llama_context)], None)
+def llama_synchronize(ctx: ctypes._Pointer[struct_llama_context]) -> None:
+    ...
+
+@ctypes_function_for_shared_library('FIXME_STUB')("llama_get_logits", [ctypes.POINTER(struct_llama_context)], ctypes.POINTER(ctypes.c_float))
+def llama_get_logits(ctx: ctypes._Pointer[struct_llama_context]) -> ctypes._Pointer[ctypes.c_float]:
+    ...
+
+@ctypes_function_for_shared_library('FIXME_STUB')("llama_get_logits_ith", [ctypes.POINTER(struct_llama_context), int32_t], ctypes.POINTER(ctypes.c_float))
+def llama_get_logits_ith(ctx: ctypes._Pointer[struct_llama_context], i: int32_t) -> ctypes._Pointer[ctypes.c_float]:
+    ...
+
+@ctypes_function_for_shared_library('FIXME_STUB')("llama_get_embeddings", [ctypes.POINTER(struct_llama_context)], ctypes.POINTER(ctypes.c_float))
+def llama_get_embeddings(ctx: ctypes._Pointer[struct_llama_context]) -> ctypes._Pointer[ctypes.c_float]:
+    ...
+
+@ctypes_function_for_shared_library('FIXME_STUB')("llama_get_embeddings_ith", [ctypes.POINTER(struct_llama_context), int32_t], ctypes.POINTER(ctypes.c_float))
+def llama_get_embeddings_ith(ctx: ctypes._Pointer[struct_llama_context], i: int32_t) -> ctypes._Pointer[ctypes.c_float]:
+    ...
+
+@ctypes_function_for_shared_library('FIXME_STUB')("llama_get_embeddings_seq", [ctypes.POINTER(struct_llama_context), llama_seq_id], ctypes.POINTER(ctypes.c_float))
+def llama_get_embeddings_seq(ctx: ctypes._Pointer[struct_llama_context], seq_id: llama_seq_id) -> ctypes._Pointer[ctypes.c_float]:
+    ...
+
+@ctypes_function_for_shared_library('FIXME_STUB')("llama_vocab_get_text", [ctypes.POINTER(struct_llama_vocab), llama_token], ctypes.POINTER(ctypes.c_char))
+def llama_vocab_get_text(vocab: ctypes._Pointer[struct_llama_vocab], token: llama_token) -> ctypes._Pointer[ctypes.c_char]:
+    ...
+
+@ctypes_function_for_shared_library('FIXME_STUB')("llama_vocab_get_score", [ctypes.POINTER(struct_llama_vocab), llama_token], ctypes.c_float)
+def llama_vocab_get_score(vocab: ctypes._Pointer[struct_llama_vocab], token: llama_token) -> ctypes.c_float:
+    ...
+
+@ctypes_function_for_shared_library('FIXME_STUB')("llama_vocab_get_attr", [ctypes.POINTER(struct_llama_vocab), llama_token], llama_token_attr)
+def llama_vocab_get_attr(vocab: ctypes._Pointer[struct_llama_vocab], token: llama_token) -> llama_token_attr:
+    ...
+
+@ctypes_function_for_shared_library('FIXME_STUB')("llama_vocab_is_eog", [ctypes.POINTER(struct_llama_vocab), llama_token], ctypes.c_bool)
+def llama_vocab_is_eog(vocab: ctypes._Pointer[struct_llama_vocab], token: llama_token) -> ctypes.c_bool:
+    ...
+
+@ctypes_function_for_shared_library('FIXME_STUB')("llama_vocab_is_control", [ctypes.POINTER(struct_llama_vocab), llama_token], ctypes.c_bool)
+def llama_vocab_is_control(vocab: ctypes._Pointer[struct_llama_vocab], token: llama_token) -> ctypes.c_bool:
+    ...
+
+@ctypes_function_for_shared_library('FIXME_STUB')("llama_vocab_bos", [ctypes.POINTER(struct_llama_vocab)], llama_token)
+def llama_vocab_bos(vocab: ctypes._Pointer[struct_llama_vocab]) -> llama_token:
+    ...
+
+@ctypes_function_for_shared_library('FIXME_STUB')("llama_vocab_eos", [ctypes.POINTER(struct_llama_vocab)], llama_token)
+def llama_vocab_eos(vocab: ctypes._Pointer[struct_llama_vocab]) -> llama_token:
+    ...
+
+@ctypes_function_for_shared_library('FIXME_STUB')("llama_vocab_eot", [ctypes.POINTER(struct_llama_vocab)], llama_token)
+def llama_vocab_eot(vocab: ctypes._Pointer[struct_llama_vocab]) -> llama_token:
+    ...
+
+@ctypes_function_for_shared_library('FIXME_STUB')("llama_vocab_sep", [ctypes.POINTER(struct_llama_vocab)], llama_token)
+def llama_vocab_sep(vocab: ctypes._Pointer[struct_llama_vocab]) -> llama_token:
+    ...
+
+@ctypes_function_for_shared_library('FIXME_STUB')("llama_vocab_nl", [ctypes.POINTER(struct_llama_vocab)], llama_token)
+def llama_vocab_nl(vocab: ctypes._Pointer[struct_llama_vocab]) -> llama_token:
+    ...
+
+@ctypes_function_for_shared_library('FIXME_STUB')("llama_vocab_pad", [ctypes.POINTER(struct_llama_vocab)], llama_token)
+def llama_vocab_pad(vocab: ctypes._Pointer[struct_llama_vocab]) -> llama_token:
+    ...
+
+@ctypes_function_for_shared_library('FIXME_STUB')("llama_vocab_get_add_bos", [ctypes.POINTER(struct_llama_vocab)], ctypes.c_bool)
+def llama_vocab_get_add_bos(vocab: ctypes._Pointer[struct_llama_vocab]) -> ctypes.c_bool:
+    ...
+
+@ctypes_function_for_shared_library('FIXME_STUB')("llama_vocab_get_add_eos", [ctypes.POINTER(struct_llama_vocab)], ctypes.c_bool)
+def llama_vocab_get_add_eos(vocab: ctypes._Pointer[struct_llama_vocab]) -> ctypes.c_bool:
+    ...
+
+@ctypes_function_for_shared_library('FIXME_STUB')("llama_vocab_fim_pre", [ctypes.POINTER(struct_llama_vocab)], llama_token)
+def llama_vocab_fim_pre(vocab: ctypes._Pointer[struct_llama_vocab]) -> llama_token:
+    ...
+
+@ctypes_function_for_shared_library('FIXME_STUB')("llama_vocab_fim_suf", [ctypes.POINTER(struct_llama_vocab)], llama_token)
+def llama_vocab_fim_suf(vocab: ctypes._Pointer[struct_llama_vocab]) -> llama_token:
+    ...
+
+@ctypes_function_for_shared_library('FIXME_STUB')("llama_vocab_fim_mid", [ctypes.POINTER(struct_llama_vocab)], llama_token)
+def llama_vocab_fim_mid(vocab: ctypes._Pointer[struct_llama_vocab]) -> llama_token:
+    ...
+
+@ctypes_function_for_shared_library('FIXME_STUB')("llama_vocab_fim_pad", [ctypes.POINTER(struct_llama_vocab)], llama_token)
+def llama_vocab_fim_pad(vocab: ctypes._Pointer[struct_llama_vocab]) -> llama_token:
+    ...
+
+@ctypes_function_for_shared_library('FIXME_STUB')("llama_vocab_fim_rep", [ctypes.POINTER(struct_llama_vocab)], llama_token)
+def llama_vocab_fim_rep(vocab: ctypes._Pointer[struct_llama_vocab]) -> llama_token:
+    ...
+
+@ctypes_function_for_shared_library('FIXME_STUB')("llama_vocab_fim_sep", [ctypes.POINTER(struct_llama_vocab)], llama_token)
+def llama_vocab_fim_sep(vocab: ctypes._Pointer[struct_llama_vocab]) -> llama_token:
+    ...
+
+@ctypes_function_for_shared_library('FIXME_STUB')("llama_token_get_text", [ctypes.POINTER(struct_llama_vocab), llama_token], ctypes.POINTER(ctypes.c_char))
+def llama_token_get_text(vocab: ctypes._Pointer[struct_llama_vocab], token: llama_token) -> ctypes._Pointer[ctypes.c_char]:
+    ...
+
+@ctypes_function_for_shared_library('FIXME_STUB')("llama_token_get_score", [ctypes.POINTER(struct_llama_vocab), llama_token], ctypes.c_float)
+def llama_token_get_score(vocab: ctypes._Pointer[struct_llama_vocab], token: llama_token) -> ctypes.c_float:
+    ...
+
+@ctypes_function_for_shared_library('FIXME_STUB')("llama_token_get_attr", [ctypes.POINTER(struct_llama_vocab), llama_token], llama_token_attr)
+def llama_token_get_attr(vocab: ctypes._Pointer[struct_llama_vocab], token: llama_token) -> llama_token_attr:
+    ...
+
+@ctypes_function_for_shared_library('FIXME_STUB')("llama_token_is_eog", [ctypes.POINTER(struct_llama_vocab), llama_token], ctypes.c_bool)
+def llama_token_is_eog(vocab: ctypes._Pointer[struct_llama_vocab], token: llama_token) -> ctypes.c_bool:
+    ...
+
+@ctypes_function_for_shared_library('FIXME_STUB')("llama_token_is_control", [ctypes.POINTER(struct_llama_vocab), llama_token], ctypes.c_bool)
+def llama_token_is_control(vocab: ctypes._Pointer[struct_llama_vocab], token: llama_token) -> ctypes.c_bool:
+    ...
+
+@ctypes_function_for_shared_library('FIXME_STUB')("llama_token_bos", [ctypes.POINTER(struct_llama_vocab)], llama_token)
+def llama_token_bos(vocab: ctypes._Pointer[struct_llama_vocab]) -> llama_token:
+    ...
+
+@ctypes_function_for_shared_library('FIXME_STUB')("llama_token_eos", [ctypes.POINTER(struct_llama_vocab)], llama_token)
+def llama_token_eos(vocab: ctypes._Pointer[struct_llama_vocab]) -> llama_token:
+    ...
+
+@ctypes_function_for_shared_library('FIXME_STUB')("llama_token_eot", [ctypes.POINTER(struct_llama_vocab)], llama_token)
+def llama_token_eot(vocab: ctypes._Pointer[struct_llama_vocab]) -> llama_token:
+    ...
+
+@ctypes_function_for_shared_library('FIXME_STUB')("llama_token_cls", [ctypes.POINTER(struct_llama_vocab)], llama_token)
+def llama_token_cls(vocab: ctypes._Pointer[struct_llama_vocab]) -> llama_token:
+    ...
+
+@ctypes_function_for_shared_library('FIXME_STUB')("llama_token_sep", [ctypes.POINTER(struct_llama_vocab)], llama_token)
+def llama_token_sep(vocab: ctypes._Pointer[struct_llama_vocab]) -> llama_token:
+    ...
+
+@ctypes_function_for_shared_library('FIXME_STUB')("llama_token_nl", [ctypes.POINTER(struct_llama_vocab)], llama_token)
+def llama_token_nl(vocab: ctypes._Pointer[struct_llama_vocab]) -> llama_token:
+    ...
+
+@ctypes_function_for_shared_library('FIXME_STUB')("llama_token_pad", [ctypes.POINTER(struct_llama_vocab)], llama_token)
+def llama_token_pad(vocab: ctypes._Pointer[struct_llama_vocab]) -> llama_token:
+    ...
+
+@ctypes_function_for_shared_library('FIXME_STUB')("llama_add_bos_token", [ctypes.POINTER(struct_llama_vocab)], ctypes.c_bool)
+def llama_add_bos_token(vocab: ctypes._Pointer[struct_llama_vocab]) -> ctypes.c_bool:
+    ...
+
+@ctypes_function_for_shared_library('FIXME_STUB')("llama_add_eos_token", [ctypes.POINTER(struct_llama_vocab)], ctypes.c_bool)
+def llama_add_eos_token(vocab: ctypes._Pointer[struct_llama_vocab]) -> ctypes.c_bool:
+    ...
+
+@ctypes_function_for_shared_library('FIXME_STUB')("llama_token_fim_pre", [ctypes.POINTER(struct_llama_vocab)], llama_token)
+def llama_token_fim_pre(vocab: ctypes._Pointer[struct_llama_vocab]) -> llama_token:
+    ...
+
+@ctypes_function_for_shared_library('FIXME_STUB')("llama_token_fim_suf", [ctypes.POINTER(struct_llama_vocab)], llama_token)
+def llama_token_fim_suf(vocab: ctypes._Pointer[struct_llama_vocab]) -> llama_token:
+    ...
+
+@ctypes_function_for_shared_library('FIXME_STUB')("llama_token_fim_mid", [ctypes.POINTER(struct_llama_vocab)], llama_token)
+def llama_token_fim_mid(vocab: ctypes._Pointer[struct_llama_vocab]) -> llama_token:
+    ...
+
+@ctypes_function_for_shared_library('FIXME_STUB')("llama_token_fim_pad", [ctypes.POINTER(struct_llama_vocab)], llama_token)
+def llama_token_fim_pad(vocab: ctypes._Pointer[struct_llama_vocab]) -> llama_token:
+    ...
+
+@ctypes_function_for_shared_library('FIXME_STUB')("llama_token_fim_rep", [ctypes.POINTER(struct_llama_vocab)], llama_token)
+def llama_token_fim_rep(vocab: ctypes._Pointer[struct_llama_vocab]) -> llama_token:
+    ...
+
+@ctypes_function_for_shared_library('FIXME_STUB')("llama_token_fim_sep", [ctypes.POINTER(struct_llama_vocab)], llama_token)
+def llama_token_fim_sep(vocab: ctypes._Pointer[struct_llama_vocab]) -> llama_token:
+    ...
+
+@ctypes_function_for_shared_library('FIXME_STUB')("llama_vocab_cls", [ctypes.POINTER(struct_llama_vocab)], llama_token)
+def llama_vocab_cls(vocab: ctypes._Pointer[struct_llama_vocab]) -> llama_token:
+    ...
+
+@ctypes_function_for_shared_library('FIXME_STUB')("llama_tokenize", [ctypes.POINTER(struct_llama_vocab), ctypes.POINTER(ctypes.c_char), int32_t, ctypes.POINTER(ctypes.c_int32), int32_t, ctypes.c_bool, ctypes.c_bool], int32_t)
+def llama_tokenize(vocab: ctypes._Pointer[struct_llama_vocab], text: ctypes._Pointer[ctypes.c_char], text_len: int32_t, tokens: ctypes._Pointer[ctypes.c_int32], n_tokens_max: int32_t, add_special: ctypes.c_bool, parse_special: ctypes.c_bool) -> int32_t:
+    ...
+
+@ctypes_function_for_shared_library('FIXME_STUB')("llama_token_to_piece", [ctypes.POINTER(struct_llama_vocab), llama_token, ctypes.POINTER(ctypes.c_char), int32_t, int32_t, ctypes.c_bool], int32_t)
+def llama_token_to_piece(vocab: ctypes._Pointer[struct_llama_vocab], token: llama_token, buf: ctypes._Pointer[ctypes.c_char], length: int32_t, lstrip: int32_t, special: ctypes.c_bool) -> int32_t:
+    ...
+
+@ctypes_function_for_shared_library('FIXME_STUB')("llama_detokenize", [ctypes.POINTER(struct_llama_vocab), ctypes.POINTER(ctypes.c_int32), int32_t, ctypes.POINTER(ctypes.c_char), int32_t, ctypes.c_bool, ctypes.c_bool], int32_t)
+def llama_detokenize(vocab: ctypes._Pointer[struct_llama_vocab], tokens: ctypes._Pointer[ctypes.c_int32], n_tokens: int32_t, text: ctypes._Pointer[ctypes.c_char], text_len_max: int32_t, remove_special: ctypes.c_bool, unparse_special: ctypes.c_bool) -> int32_t:
+    ...
+
+@ctypes_function_for_shared_library('FIXME_STUB')("llama_chat_apply_template", [ctypes.POINTER(ctypes.c_char), ctypes.POINTER(struct_llama_chat_message), size_t, ctypes.c_bool, ctypes.POINTER(ctypes.c_char), int32_t], int32_t)
+def llama_chat_apply_template(tmpl: ctypes._Pointer[ctypes.c_char], chat: ctypes._Pointer[struct_llama_chat_message], n_msg: size_t, add_ass: ctypes.c_bool, buf: ctypes._Pointer[ctypes.c_char], length: int32_t) -> int32_t:
+    ...
+
+@ctypes_function_for_shared_library('FIXME_STUB')("llama_chat_builtin_templates", [ctypes.POINTER(ctypes.POINTER(ctypes.c_char)), size_t], int32_t)
+def llama_chat_builtin_templates(output: ctypes._Pointer[ctypes._Pointer[ctypes.c_char]], len: size_t) -> int32_t:
+    ...
+
+llama_sampler_context_t = ctypes.POINTER(None)
+class struct_llama_sampler_i(Structure):
+    if TYPE_CHECKING:
+        name: Callable[[ctypes._Pointer[struct_llama_sampler]], ctypes._Pointer[ctypes.c_char]]
+        accept: Callable[[ctypes._Pointer[struct_llama_sampler], ctypes.c_int32], None]
+        apply: Callable[[ctypes._Pointer[struct_llama_sampler], ctypes._Pointer[struct_llama_token_data_array]], None]
+        reset: Callable[[ctypes._Pointer[struct_llama_sampler]], None]
+        clone: Callable[[ctypes._Pointer[struct_llama_sampler]], ctypes._Pointer[struct_llama_sampler]]
+        free: Callable[[ctypes._Pointer[struct_llama_sampler]], None]
+class struct_llama_sampler(Structure):
+    if TYPE_CHECKING:
+        iface: ctypes._Pointer[struct_llama_sampler_i]
+        ctx: ctypes.c_void_p
+struct_llama_sampler_i._pack_ = 1 # source:False
+struct_llama_sampler_i._fields_ = [
+    ('name', ctypes.CFUNCTYPE(ctypes.POINTER(ctypes.c_char), ctypes.POINTER(struct_llama_sampler))),
+    ('accept', ctypes.CFUNCTYPE(None, ctypes.POINTER(struct_llama_sampler), ctypes.c_int32)),
+    ('apply', ctypes.CFUNCTYPE(None, ctypes.POINTER(struct_llama_sampler), ctypes.POINTER(struct_llama_token_data_array))),
+    ('reset', ctypes.CFUNCTYPE(None, ctypes.POINTER(struct_llama_sampler))),
+    ('clone', ctypes.CFUNCTYPE(ctypes.POINTER(struct_llama_sampler), ctypes.POINTER(struct_llama_sampler))),
+    ('free', ctypes.CFUNCTYPE(None, ctypes.POINTER(struct_llama_sampler))),
+]
+
+@ctypes_function_for_shared_library('FIXME_STUB')("llama_sampler_init", [ctypes.POINTER(struct_llama_sampler_i), llama_sampler_context_t], ctypes.POINTER(struct_llama_sampler))
+def llama_sampler_init(iface: ctypes._Pointer[struct_llama_sampler_i], ctx: llama_sampler_context_t) -> ctypes._Pointer[struct_llama_sampler]:
+    ...
+
+@ctypes_function_for_shared_library('FIXME_STUB')("llama_sampler_name", [ctypes.POINTER(struct_llama_sampler)], ctypes.POINTER(ctypes.c_char))
+def llama_sampler_name(smpl: ctypes._Pointer[struct_llama_sampler]) -> ctypes._Pointer[ctypes.c_char]:
+    ...
+
+@ctypes_function_for_shared_library('FIXME_STUB')("llama_sampler_accept", [ctypes.POINTER(struct_llama_sampler), llama_token], None)
+def llama_sampler_accept(smpl: ctypes._Pointer[struct_llama_sampler], token: llama_token) -> None:
+    ...
+
+@ctypes_function_for_shared_library('FIXME_STUB')("llama_sampler_apply", [ctypes.POINTER(struct_llama_sampler), ctypes.POINTER(struct_llama_token_data_array)], None)
+def llama_sampler_apply(smpl: ctypes._Pointer[struct_llama_sampler], cur_p: ctypes._Pointer[struct_llama_token_data_array]) -> None:
+    ...
+
+@ctypes_function_for_shared_library('FIXME_STUB')("llama_sampler_reset", [ctypes.POINTER(struct_llama_sampler)], None)
+def llama_sampler_reset(smpl: ctypes._Pointer[struct_llama_sampler]) -> None:
+    ...
+
+@ctypes_function_for_shared_library('FIXME_STUB')("llama_sampler_clone", [ctypes.POINTER(struct_llama_sampler)], ctypes.POINTER(struct_llama_sampler))
+def llama_sampler_clone(smpl: ctypes._Pointer[struct_llama_sampler]) -> ctypes._Pointer[struct_llama_sampler]:
+    ...
+
+@ctypes_function_for_shared_library('FIXME_STUB')("llama_sampler_free", [ctypes.POINTER(struct_llama_sampler)], None)
+def llama_sampler_free(smpl: ctypes._Pointer[struct_llama_sampler]) -> None:
+    ...
+
+@ctypes_function_for_shared_library('FIXME_STUB')("llama_sampler_chain_init", [struct_llama_sampler_chain_params], ctypes.POINTER(struct_llama_sampler))
+def llama_sampler_chain_init(params: struct_llama_sampler_chain_params) -> ctypes._Pointer[struct_llama_sampler]:
+    ...
+
+@ctypes_function_for_shared_library('FIXME_STUB')("llama_sampler_chain_add", [ctypes.POINTER(struct_llama_sampler), ctypes.POINTER(struct_llama_sampler)], None)
+def llama_sampler_chain_add(chain: ctypes._Pointer[struct_llama_sampler], smpl: ctypes._Pointer[struct_llama_sampler]) -> None:
+    ...
+
+@ctypes_function_for_shared_library('FIXME_STUB')("llama_sampler_chain_get", [ctypes.POINTER(struct_llama_sampler), int32_t], ctypes.POINTER(struct_llama_sampler))
+def llama_sampler_chain_get(chain: ctypes._Pointer[struct_llama_sampler], i: int32_t) -> ctypes._Pointer[struct_llama_sampler]:
+    ...
+
+@ctypes_function_for_shared_library('FIXME_STUB')("llama_sampler_chain_n", [ctypes.POINTER(struct_llama_sampler)], ctypes.c_int32)
+def llama_sampler_chain_n(chain: ctypes._Pointer[struct_llama_sampler]) -> ctypes.c_int32:
+    ...
+
+@ctypes_function_for_shared_library('FIXME_STUB')("llama_sampler_chain_remove", [ctypes.POINTER(struct_llama_sampler), int32_t], ctypes.POINTER(struct_llama_sampler))
+def llama_sampler_chain_remove(chain: ctypes._Pointer[struct_llama_sampler], i: int32_t) -> ctypes._Pointer[struct_llama_sampler]:
+    ...
+
+@ctypes_function_for_shared_library('FIXME_STUB')("llama_sampler_init_greedy", [], ctypes.POINTER(struct_llama_sampler))
+def llama_sampler_init_greedy() -> ctypes._Pointer[struct_llama_sampler]:
+    ...
+
+@ctypes_function_for_shared_library('FIXME_STUB')("llama_sampler_init_dist", [uint32_t], ctypes.POINTER(struct_llama_sampler))
+def llama_sampler_init_dist(seed: uint32_t) -> ctypes._Pointer[struct_llama_sampler]:
+    ...
+
+@ctypes_function_for_shared_library('FIXME_STUB')("llama_sampler_init_softmax", [], ctypes.POINTER(struct_llama_sampler))
+def llama_sampler_init_softmax() -> ctypes._Pointer[struct_llama_sampler]:
+    ...
+
+@ctypes_function_for_shared_library('FIXME_STUB')("llama_sampler_init_top_k", [int32_t], ctypes.POINTER(struct_llama_sampler))
+def llama_sampler_init_top_k(k: int32_t) -> ctypes._Pointer[struct_llama_sampler]:
+    ...
+
+@ctypes_function_for_shared_library('FIXME_STUB')("llama_sampler_init_top_p", [ctypes.c_float, size_t], ctypes.POINTER(struct_llama_sampler))
+def llama_sampler_init_top_p(p: ctypes.c_float, min_keep: size_t) -> ctypes._Pointer[struct_llama_sampler]:
+    ...
+
+@ctypes_function_for_shared_library('FIXME_STUB')("llama_sampler_init_min_p", [ctypes.c_float, size_t], ctypes.POINTER(struct_llama_sampler))
+def llama_sampler_init_min_p(p: ctypes.c_float, min_keep: size_t) -> ctypes._Pointer[struct_llama_sampler]:
+    ...
+
+@ctypes_function_for_shared_library('FIXME_STUB')("llama_sampler_init_typical", [ctypes.c_float, size_t], ctypes.POINTER(struct_llama_sampler))
+def llama_sampler_init_typical(p: ctypes.c_float, min_keep: size_t) -> ctypes._Pointer[struct_llama_sampler]:
+    ...
+
+@ctypes_function_for_shared_library('FIXME_STUB')("llama_sampler_init_temp", [ctypes.c_float], ctypes.POINTER(struct_llama_sampler))
+def llama_sampler_init_temp(t: ctypes.c_float) -> ctypes._Pointer[struct_llama_sampler]:
+    ...
+
+@ctypes_function_for_shared_library('FIXME_STUB')("llama_sampler_init_temp_ext", [ctypes.c_float, ctypes.c_float, ctypes.c_float], ctypes.POINTER(struct_llama_sampler))
+def llama_sampler_init_temp_ext(t: ctypes.c_float, delta: ctypes.c_float, exponent: ctypes.c_float) -> ctypes._Pointer[struct_llama_sampler]:
+    ...
+
+@ctypes_function_for_shared_library('FIXME_STUB')("llama_sampler_init_xtc", [ctypes.c_float, ctypes.c_float, size_t, uint32_t], ctypes.POINTER(struct_llama_sampler))
+def llama_sampler_init_xtc(p: ctypes.c_float, t: ctypes.c_float, min_keep: size_t, seed: uint32_t) -> ctypes._Pointer[struct_llama_sampler]:
+    ...
+
+@ctypes_function_for_shared_library('FIXME_STUB')("llama_sampler_init_top_n_sigma", [ctypes.c_float], ctypes.POINTER(struct_llama_sampler))
+def llama_sampler_init_top_n_sigma(n: ctypes.c_float) -> ctypes._Pointer[struct_llama_sampler]:
+    ...
+
+@ctypes_function_for_shared_library('FIXME_STUB')("llama_sampler_init_mirostat", [int32_t, uint32_t, ctypes.c_float, ctypes.c_float, int32_t], ctypes.POINTER(struct_llama_sampler))
+def llama_sampler_init_mirostat(n_vocab: int32_t, seed: uint32_t, tau: ctypes.c_float, eta: ctypes.c_float, m: int32_t) -> ctypes._Pointer[struct_llama_sampler]:
+    ...
+
+@ctypes_function_for_shared_library('FIXME_STUB')("llama_sampler_init_mirostat_v2", [uint32_t, ctypes.c_float, ctypes.c_float], ctypes.POINTER(struct_llama_sampler))
+def llama_sampler_init_mirostat_v2(seed: uint32_t, tau: ctypes.c_float, eta: ctypes.c_float) -> ctypes._Pointer[struct_llama_sampler]:
+    ...
+
+@ctypes_function_for_shared_library('FIXME_STUB')("llama_sampler_init_grammar", [ctypes.POINTER(struct_llama_vocab), ctypes.POINTER(ctypes.c_char), ctypes.POINTER(ctypes.c_char)], ctypes.POINTER(struct_llama_sampler))
+def llama_sampler_init_grammar(vocab: ctypes._Pointer[struct_llama_vocab], grammar_str: ctypes._Pointer[ctypes.c_char], grammar_root: ctypes._Pointer[ctypes.c_char]) -> ctypes._Pointer[struct_llama_sampler]:
+    ...
+
+@ctypes_function_for_shared_library('FIXME_STUB')("llama_sampler_init_grammar_lazy", [ctypes.POINTER(struct_llama_vocab), ctypes.POINTER(ctypes.c_char), ctypes.POINTER(ctypes.c_char), ctypes.POINTER(ctypes.POINTER(ctypes.c_char)), size_t, ctypes.POINTER(ctypes.c_int32), size_t], ctypes.POINTER(struct_llama_sampler))
+def llama_sampler_init_grammar_lazy(vocab: ctypes._Pointer[struct_llama_vocab], grammar_str: ctypes._Pointer[ctypes.c_char], grammar_root: ctypes._Pointer[ctypes.c_char], trigger_words: ctypes._Pointer[ctypes._Pointer[ctypes.c_char]], num_trigger_words: size_t, trigger_tokens: ctypes._Pointer[ctypes.c_int32], num_trigger_tokens: size_t) -> ctypes._Pointer[struct_llama_sampler]:
+    ...
+
+@ctypes_function_for_shared_library('FIXME_STUB')("llama_sampler_init_grammar_lazy_patterns", [ctypes.POINTER(struct_llama_vocab), ctypes.POINTER(ctypes.c_char), ctypes.POINTER(ctypes.c_char), ctypes.POINTER(ctypes.POINTER(ctypes.c_char)), size_t, ctypes.POINTER(ctypes.c_int32), size_t], ctypes.POINTER(struct_llama_sampler))
+def llama_sampler_init_grammar_lazy_patterns(vocab: ctypes._Pointer[struct_llama_vocab], grammar_str: ctypes._Pointer[ctypes.c_char], grammar_root: ctypes._Pointer[ctypes.c_char], trigger_patterns: ctypes._Pointer[ctypes._Pointer[ctypes.c_char]], num_trigger_patterns: size_t, trigger_tokens: ctypes._Pointer[ctypes.c_int32], num_trigger_tokens: size_t) -> ctypes._Pointer[struct_llama_sampler]:
+    ...
+
+@ctypes_function_for_shared_library('FIXME_STUB')("llama_sampler_init_penalties", [int32_t, ctypes.c_float, ctypes.c_float, ctypes.c_float], ctypes.POINTER(struct_llama_sampler))
+def llama_sampler_init_penalties(penalty_last_n: int32_t, penalty_repeat: ctypes.c_float, penalty_freq: ctypes.c_float, penalty_present: ctypes.c_float) -> ctypes._Pointer[struct_llama_sampler]:
+    ...
+
+@ctypes_function_for_shared_library('FIXME_STUB')("llama_sampler_init_dry", [ctypes.POINTER(struct_llama_vocab), int32_t, ctypes.c_float, ctypes.c_float, int32_t, int32_t, ctypes.POINTER(ctypes.POINTER(ctypes.c_char)), size_t], ctypes.POINTER(struct_llama_sampler))
+def llama_sampler_init_dry(vocab: ctypes._Pointer[struct_llama_vocab], n_ctx_train: int32_t, dry_multiplier: ctypes.c_float, dry_base: ctypes.c_float, dry_allowed_length: int32_t, dry_penalty_last_n: int32_t, seq_breakers: ctypes._Pointer[ctypes._Pointer[ctypes.c_char]], num_breakers: size_t) -> ctypes._Pointer[struct_llama_sampler]:
+    ...
+
+@ctypes_function_for_shared_library('FIXME_STUB')("llama_sampler_init_logit_bias", [int32_t, int32_t, ctypes.POINTER(struct_llama_logit_bias)], ctypes.POINTER(struct_llama_sampler))
+def llama_sampler_init_logit_bias(n_vocab: int32_t, n_logit_bias: int32_t, logit_bias: ctypes._Pointer[struct_llama_logit_bias]) -> ctypes._Pointer[struct_llama_sampler]:
+    ...
+
+@ctypes_function_for_shared_library('FIXME_STUB')("llama_sampler_init_infill", [ctypes.POINTER(struct_llama_vocab)], ctypes.POINTER(struct_llama_sampler))
+def llama_sampler_init_infill(vocab: ctypes._Pointer[struct_llama_vocab]) -> ctypes._Pointer[struct_llama_sampler]:
+    ...
+
+@ctypes_function_for_shared_library('FIXME_STUB')("llama_sampler_get_seed", [ctypes.POINTER(struct_llama_sampler)], uint32_t)
+def llama_sampler_get_seed(smpl: ctypes._Pointer[struct_llama_sampler]) -> uint32_t:
+    ...
+
+@ctypes_function_for_shared_library('FIXME_STUB')("llama_sampler_sample", [ctypes.POINTER(struct_llama_sampler), ctypes.POINTER(struct_llama_context), int32_t], llama_token)
+def llama_sampler_sample(smpl: ctypes._Pointer[struct_llama_sampler], ctx: ctypes._Pointer[struct_llama_context], idx: int32_t) -> llama_token:
+    ...
+
+@ctypes_function_for_shared_library('FIXME_STUB')("llama_split_path", [ctypes.POINTER(ctypes.c_char), size_t, ctypes.POINTER(ctypes.c_char), ctypes.c_int32, ctypes.c_int32], ctypes.c_int32)
+def llama_split_path(split_path: ctypes._Pointer[ctypes.c_char], maxlen: size_t, path_prefix: ctypes._Pointer[ctypes.c_char], split_no: ctypes.c_int32, split_count: ctypes.c_int32) -> ctypes.c_int32:
+    ...
+
+@ctypes_function_for_shared_library('FIXME_STUB')("llama_split_prefix", [ctypes.POINTER(ctypes.c_char), size_t, ctypes.POINTER(ctypes.c_char), ctypes.c_int32, ctypes.c_int32], ctypes.c_int32)
+def llama_split_prefix(split_prefix: ctypes._Pointer[ctypes.c_char], maxlen: size_t, split_path: ctypes._Pointer[ctypes.c_char], split_no: ctypes.c_int32, split_count: ctypes.c_int32) -> ctypes.c_int32:
+    ...
+
+@ctypes_function_for_shared_library('FIXME_STUB')("llama_print_system_info", [], ctypes.POINTER(ctypes.c_char))
+def llama_print_system_info() -> ctypes._Pointer[ctypes.c_char]:
+    ...
+
+@ctypes_function_for_shared_library('FIXME_STUB')("llama_log_set", [ggml_log_callback, ctypes.POINTER(None)], None)
+def llama_log_set(log_callback: ggml_log_callback, user_data: ctypes.c_void_p) -> None:
+    ...
+
+class struct_llama_perf_context_data(Structure):
+    if TYPE_CHECKING:
+        t_start_ms: ctypes.c_double
+        t_load_ms: ctypes.c_double
+        t_p_eval_ms: ctypes.c_double
+        t_eval_ms: ctypes.c_double
+        n_p_eval: ctypes.c_int32
+        n_eval: ctypes.c_int32
+struct_llama_perf_context_data._pack_ = 1 # source:False
+struct_llama_perf_context_data._fields_ = [
+    ('t_start_ms', ctypes.c_double),
+    ('t_load_ms', ctypes.c_double),
+    ('t_p_eval_ms', ctypes.c_double),
+    ('t_eval_ms', ctypes.c_double),
+    ('n_p_eval', ctypes.c_int32),
+    ('n_eval', ctypes.c_int32),
+]
+
+class struct_llama_perf_sampler_data(Structure):
+    if TYPE_CHECKING:
+        t_sample_ms: ctypes.c_double
+        n_sample: ctypes.c_int32
+struct_llama_perf_sampler_data._pack_ = 1 # source:False
+struct_llama_perf_sampler_data._fields_ = [
+    ('t_sample_ms', ctypes.c_double),
+    ('n_sample', ctypes.c_int32),
+    ('PADDING_0', ctypes.c_ubyte * 4),
+]
+
+@ctypes_function_for_shared_library('FIXME_STUB')("llama_perf_context", [ctypes.POINTER(struct_llama_context)], struct_llama_perf_context_data)
+def llama_perf_context(ctx: ctypes._Pointer[struct_llama_context]) -> struct_llama_perf_context_data:
+    ...
+
+@ctypes_function_for_shared_library('FIXME_STUB')("llama_perf_context_print", [ctypes.POINTER(struct_llama_context)], None)
+def llama_perf_context_print(ctx: ctypes._Pointer[struct_llama_context]) -> None:
+    ...
+
+@ctypes_function_for_shared_library('FIXME_STUB')("llama_perf_context_reset", [ctypes.POINTER(struct_llama_context)], None)
+def llama_perf_context_reset(ctx: ctypes._Pointer[struct_llama_context]) -> None:
+    ...
+
+@ctypes_function_for_shared_library('FIXME_STUB')("llama_perf_sampler", [ctypes.POINTER(struct_llama_sampler)], struct_llama_perf_sampler_data)
+def llama_perf_sampler(chain: ctypes._Pointer[struct_llama_sampler]) -> struct_llama_perf_sampler_data:
+    ...
+
+@ctypes_function_for_shared_library('FIXME_STUB')("llama_perf_sampler_print", [ctypes.POINTER(struct_llama_sampler)], None)
+def llama_perf_sampler_print(chain: ctypes._Pointer[struct_llama_sampler]) -> None:
+    ...
+
+@ctypes_function_for_shared_library('FIXME_STUB')("llama_perf_sampler_reset", [ctypes.POINTER(struct_llama_sampler)], None)
+def llama_perf_sampler_reset(chain: ctypes._Pointer[struct_llama_sampler]) -> None:
+    ...
+
+llama_opt_param_filter = ctypes.CFUNCTYPE(ctypes.c_bool, ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(None))
+@ctypes_function_for_shared_library('FIXME_STUB')("llama_opt_param_filter_all", [ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(None)], ctypes.c_bool)
+def llama_opt_param_filter_all(tensor: ctypes._Pointer[struct_ggml_tensor], userdata: ctypes.c_void_p) -> ctypes.c_bool:
+    ...
+
+class struct_llama_opt_params(Structure):
+    if TYPE_CHECKING:
+        n_ctx_train: ctypes.c_uint32
+        param_filter: Callable[[ctypes._Pointer[struct_ggml_tensor], ctypes.c_void_p], ctypes.c_bool]
+        param_filter_ud: ctypes.c_void_p
+        get_opt_pars: Callable[[ctypes.c_void_p], struct_ggml_opt_optimizer_params]
+        get_opt_pars_ud: ctypes.c_void_p
+class struct_ggml_opt_optimizer_params(Structure):
+    if TYPE_CHECKING:
+        adamw: struct_ggml_opt_optimizer_params_adamw
+class struct_ggml_opt_optimizer_params_adamw(Structure):
+    if TYPE_CHECKING:
+        alpha: ctypes.c_float
+        beta1: ctypes.c_float
+        beta2: ctypes.c_float
+        eps: ctypes.c_float
+        wd: ctypes.c_float
+struct_ggml_opt_optimizer_params_adamw._pack_ = 1 # source:False
+struct_ggml_opt_optimizer_params_adamw._fields_ = [
+    ('alpha', ctypes.c_float),
+    ('beta1', ctypes.c_float),
+    ('beta2', ctypes.c_float),
+    ('eps', ctypes.c_float),
+    ('wd', ctypes.c_float),
+]
+
+struct_ggml_opt_optimizer_params._pack_ = 1 # source:False
+struct_ggml_opt_optimizer_params._fields_ = [
+    ('adamw', struct_ggml_opt_optimizer_params_adamw),
+]
+
+struct_llama_opt_params._pack_ = 1 # source:False
+struct_llama_opt_params._fields_ = [
+    ('n_ctx_train', ctypes.c_uint32),
+    ('PADDING_0', ctypes.c_ubyte * 4),
+    ('param_filter', ctypes.CFUNCTYPE(ctypes.c_bool, ctypes.POINTER(struct_ggml_tensor), ctypes.POINTER(None))),
+    ('param_filter_ud', ctypes.POINTER(None)),
+    ('get_opt_pars', ctypes.CFUNCTYPE(struct_ggml_opt_optimizer_params, ctypes.POINTER(None))),
+    ('get_opt_pars_ud', ctypes.POINTER(None)),
+]
+
+@ctypes_function_for_shared_library('FIXME_STUB')("llama_opt_init", [ctypes.POINTER(struct_llama_context), ctypes.POINTER(struct_llama_model), struct_llama_opt_params], None)
+def llama_opt_init(lctx: ctypes._Pointer[struct_llama_context], model: ctypes._Pointer[struct_llama_model], lopt_params: struct_llama_opt_params) -> None:
+    ...
+
+class struct_ggml_opt_dataset(Structure):
+    pass
+
+ggml_opt_dataset_t = ctypes.POINTER(struct_ggml_opt_dataset)
+class struct_ggml_opt_result(Structure):
+    pass
+
+ggml_opt_result_t = ctypes.POINTER(struct_ggml_opt_result)
+class struct_ggml_opt_context(Structure):
+    pass
+
+ggml_opt_epoch_callback = ctypes.CFUNCTYPE(None, ctypes.c_bool, ctypes.POINTER(struct_ggml_opt_context), ctypes.POINTER(struct_ggml_opt_dataset), ctypes.POINTER(struct_ggml_opt_result), ctypes.c_int64, ctypes.c_int64, ctypes.c_int64)
+@ctypes_function_for_shared_library('FIXME_STUB')("llama_opt_epoch", [ctypes.POINTER(struct_llama_context), ggml_opt_dataset_t, ggml_opt_result_t, ggml_opt_result_t, int64_t, ggml_opt_epoch_callback, ggml_opt_epoch_callback], None)
+def llama_opt_epoch(lctx: ctypes._Pointer[struct_llama_context], dataset: ggml_opt_dataset_t, result_train: ggml_opt_result_t, result_eval: ggml_opt_result_t, idata_split: int64_t, callback_train: ggml_opt_epoch_callback, callback_eval: ggml_opt_epoch_callback) -> None:
     ...
 
 struct_ggml_object._pack_ = 1 # source:False
@@ -3777,6 +5260,12 @@ struct_ggml_object._fields_ = [
     ('next', ctypes.POINTER(struct_ggml_object)),
     ('type', ggml_object_type),
     ('padding', ctypes.c_char * 4),
+]
+
+struct_llama_sampler._pack_ = 1 # source:False
+struct_llama_sampler._fields_ = [
+    ('iface', ctypes.POINTER(struct_llama_sampler_i)),
+    ('ctx', ctypes.POINTER(None)),
 ]
 
 ggml_init_params = struct_ggml_init_params
@@ -3812,6 +5301,11 @@ ggml_type_traits_cpu = struct_ggml_type_traits_cpu
 ggml_logger_state = struct_ggml_logger_state
 ggml_context_container = struct_ggml_context_container
 ggml_backend_multi_buffer_context = struct_ggml_backend_multi_buffer_context
+ggml_opt_optimizer_params = struct_ggml_opt_optimizer_params
+ggml_opt_optimizer_params_adamw = struct_ggml_opt_optimizer_params_adamw
+ggml_opt_dataset = struct_ggml_opt_dataset
+ggml_opt_result = struct_ggml_opt_result
+ggml_opt_context = struct_ggml_opt_context
 if TYPE_CHECKING:
     ggml_init_params_p = ctypes._Pointer[struct_ggml_init_params]
     ggml_tensor_p = ctypes._Pointer[struct_ggml_tensor]
@@ -3846,6 +5340,11 @@ if TYPE_CHECKING:
     ggml_logger_state_p = ctypes._Pointer[struct_ggml_logger_state]
     ggml_context_container_p = ctypes._Pointer[struct_ggml_context_container]
     ggml_backend_multi_buffer_context_p = ctypes._Pointer[struct_ggml_backend_multi_buffer_context]
+    ggml_opt_optimizer_params_p = ctypes._Pointer[struct_ggml_opt_optimizer_params]
+    ggml_opt_optimizer_params_adamw_p = ctypes._Pointer[struct_ggml_opt_optimizer_params_adamw]
+    ggml_opt_dataset_p = ctypes._Pointer[struct_ggml_opt_dataset]
+    ggml_opt_result_p = ctypes._Pointer[struct_ggml_opt_result]
+    ggml_opt_context_p = ctypes._Pointer[struct_ggml_opt_context]
 else:
     ggml_init_params_p = ctypes.POINTER(struct_ggml_init_params)
     ggml_tensor_p = ctypes.POINTER(struct_ggml_tensor)
@@ -3880,6 +5379,11 @@ else:
     ggml_logger_state_p = ctypes.POINTER(struct_ggml_logger_state)
     ggml_context_container_p = ctypes.POINTER(struct_ggml_context_container)
     ggml_backend_multi_buffer_context_p = ctypes.POINTER(struct_ggml_backend_multi_buffer_context)
+    ggml_opt_optimizer_params_p = ctypes.POINTER(struct_ggml_opt_optimizer_params)
+    ggml_opt_optimizer_params_adamw_p = ctypes.POINTER(struct_ggml_opt_optimizer_params_adamw)
+    ggml_opt_dataset_p = ctypes.POINTER(struct_ggml_opt_dataset)
+    ggml_opt_result_p = ctypes.POINTER(struct_ggml_opt_result)
+    ggml_opt_context_p = ctypes.POINTER(struct_ggml_opt_context)
 __all__ = \
     ['GGML_BACKEND_BUFFER_USAGE_ANY',
     'GGML_BACKEND_BUFFER_USAGE_COMPUTE',
@@ -3962,18 +5466,82 @@ __all__ = \
     'GGML_UNARY_OP_HARDSWISH', 'GGML_UNARY_OP_NEG',
     'GGML_UNARY_OP_RELU', 'GGML_UNARY_OP_SGN',
     'GGML_UNARY_OP_SIGMOID', 'GGML_UNARY_OP_SILU',
-    'GGML_UNARY_OP_STEP', 'GGML_UNARY_OP_TANH', 'fmt_size',
-    'ggml_abort', 'ggml_abort_callback', 'ggml_abs',
-    'ggml_abs_inplace', 'ggml_acc', 'ggml_acc_impl',
-    'ggml_acc_inplace', 'ggml_acc_or_set', 'ggml_add', 'ggml_add1',
-    'ggml_add1_impl', 'ggml_add1_inplace', 'ggml_add1_or_set',
-    'ggml_add_cast', 'ggml_add_cast_impl', 'ggml_add_impl',
-    'ggml_add_inplace', 'ggml_add_or_set', 'ggml_add_rel_pos',
-    'ggml_add_rel_pos_impl', 'ggml_add_rel_pos_inplace',
-    'ggml_aligned_free', 'ggml_aligned_malloc', 'ggml_arange',
-    'ggml_are_same_layout', 'ggml_are_same_shape',
-    'ggml_are_same_stride', 'ggml_argmax', 'ggml_argsort',
-    'ggml_backend', 'ggml_backend_alloc_buffer',
+    'GGML_UNARY_OP_STEP', 'GGML_UNARY_OP_TANH',
+    'LLAMA_ATTENTION_TYPE_CAUSAL', 'LLAMA_ATTENTION_TYPE_NON_CAUSAL',
+    'LLAMA_ATTENTION_TYPE_UNSPECIFIED', 'LLAMA_FTYPE_ALL_F32',
+    'LLAMA_FTYPE_GUESSED', 'LLAMA_FTYPE_MOSTLY_BF16',
+    'LLAMA_FTYPE_MOSTLY_F16', 'LLAMA_FTYPE_MOSTLY_IQ1_M',
+    'LLAMA_FTYPE_MOSTLY_IQ1_S', 'LLAMA_FTYPE_MOSTLY_IQ2_M',
+    'LLAMA_FTYPE_MOSTLY_IQ2_S', 'LLAMA_FTYPE_MOSTLY_IQ2_XS',
+    'LLAMA_FTYPE_MOSTLY_IQ2_XXS', 'LLAMA_FTYPE_MOSTLY_IQ3_M',
+    'LLAMA_FTYPE_MOSTLY_IQ3_S', 'LLAMA_FTYPE_MOSTLY_IQ3_XS',
+    'LLAMA_FTYPE_MOSTLY_IQ3_XXS', 'LLAMA_FTYPE_MOSTLY_IQ4_NL',
+    'LLAMA_FTYPE_MOSTLY_IQ4_XS', 'LLAMA_FTYPE_MOSTLY_Q2_K',
+    'LLAMA_FTYPE_MOSTLY_Q2_K_S', 'LLAMA_FTYPE_MOSTLY_Q3_K_L',
+    'LLAMA_FTYPE_MOSTLY_Q3_K_M', 'LLAMA_FTYPE_MOSTLY_Q3_K_S',
+    'LLAMA_FTYPE_MOSTLY_Q4_0', 'LLAMA_FTYPE_MOSTLY_Q4_1',
+    'LLAMA_FTYPE_MOSTLY_Q4_K_M', 'LLAMA_FTYPE_MOSTLY_Q4_K_S',
+    'LLAMA_FTYPE_MOSTLY_Q5_0', 'LLAMA_FTYPE_MOSTLY_Q5_1',
+    'LLAMA_FTYPE_MOSTLY_Q5_K_M', 'LLAMA_FTYPE_MOSTLY_Q5_K_S',
+    'LLAMA_FTYPE_MOSTLY_Q6_K', 'LLAMA_FTYPE_MOSTLY_Q8_0',
+    'LLAMA_FTYPE_MOSTLY_TQ1_0', 'LLAMA_FTYPE_MOSTLY_TQ2_0',
+    'LLAMA_KV_OVERRIDE_TYPE_BOOL', 'LLAMA_KV_OVERRIDE_TYPE_FLOAT',
+    'LLAMA_KV_OVERRIDE_TYPE_INT', 'LLAMA_KV_OVERRIDE_TYPE_STR',
+    'LLAMA_POOLING_TYPE_CLS', 'LLAMA_POOLING_TYPE_LAST',
+    'LLAMA_POOLING_TYPE_MEAN', 'LLAMA_POOLING_TYPE_NONE',
+    'LLAMA_POOLING_TYPE_RANK', 'LLAMA_POOLING_TYPE_UNSPECIFIED',
+    'LLAMA_ROPE_SCALING_TYPE_LINEAR',
+    'LLAMA_ROPE_SCALING_TYPE_LONGROPE',
+    'LLAMA_ROPE_SCALING_TYPE_MAX_VALUE',
+    'LLAMA_ROPE_SCALING_TYPE_NONE',
+    'LLAMA_ROPE_SCALING_TYPE_UNSPECIFIED',
+    'LLAMA_ROPE_SCALING_TYPE_YARN', 'LLAMA_ROPE_TYPE_MROPE',
+    'LLAMA_ROPE_TYPE_NEOX', 'LLAMA_ROPE_TYPE_NONE',
+    'LLAMA_ROPE_TYPE_NORM', 'LLAMA_ROPE_TYPE_VISION',
+    'LLAMA_SPLIT_MODE_LAYER', 'LLAMA_SPLIT_MODE_NONE',
+    'LLAMA_SPLIT_MODE_ROW', 'LLAMA_TOKEN_ATTR_BYTE',
+    'LLAMA_TOKEN_ATTR_CONTROL', 'LLAMA_TOKEN_ATTR_LSTRIP',
+    'LLAMA_TOKEN_ATTR_NORMAL', 'LLAMA_TOKEN_ATTR_NORMALIZED',
+    'LLAMA_TOKEN_ATTR_RSTRIP', 'LLAMA_TOKEN_ATTR_SINGLE_WORD',
+    'LLAMA_TOKEN_ATTR_UNDEFINED', 'LLAMA_TOKEN_ATTR_UNKNOWN',
+    'LLAMA_TOKEN_ATTR_UNUSED', 'LLAMA_TOKEN_ATTR_USER_DEFINED',
+    'LLAMA_TOKEN_TYPE_BYTE', 'LLAMA_TOKEN_TYPE_CONTROL',
+    'LLAMA_TOKEN_TYPE_NORMAL', 'LLAMA_TOKEN_TYPE_UNDEFINED',
+    'LLAMA_TOKEN_TYPE_UNKNOWN', 'LLAMA_TOKEN_TYPE_UNUSED',
+    'LLAMA_TOKEN_TYPE_USER_DEFINED',
+    'LLAMA_VOCAB_PRE_TYPE_BAILINGMOE', 'LLAMA_VOCAB_PRE_TYPE_BLOOM',
+    'LLAMA_VOCAB_PRE_TYPE_CHAMELEON', 'LLAMA_VOCAB_PRE_TYPE_CHATGLM3',
+    'LLAMA_VOCAB_PRE_TYPE_CHATGLM4', 'LLAMA_VOCAB_PRE_TYPE_CODESHELL',
+    'LLAMA_VOCAB_PRE_TYPE_COMMAND_R', 'LLAMA_VOCAB_PRE_TYPE_DBRX',
+    'LLAMA_VOCAB_PRE_TYPE_DEEPSEEK3_LLM',
+    'LLAMA_VOCAB_PRE_TYPE_DEEPSEEK_CODER',
+    'LLAMA_VOCAB_PRE_TYPE_DEEPSEEK_LLM',
+    'LLAMA_VOCAB_PRE_TYPE_DEFAULT', 'LLAMA_VOCAB_PRE_TYPE_EXAONE',
+    'LLAMA_VOCAB_PRE_TYPE_FALCON', 'LLAMA_VOCAB_PRE_TYPE_GPT2',
+    'LLAMA_VOCAB_PRE_TYPE_GPT3_FINNISH', 'LLAMA_VOCAB_PRE_TYPE_GPT4O',
+    'LLAMA_VOCAB_PRE_TYPE_JAIS', 'LLAMA_VOCAB_PRE_TYPE_LLAMA3',
+    'LLAMA_VOCAB_PRE_TYPE_LLAMA4', 'LLAMA_VOCAB_PRE_TYPE_MINERVA',
+    'LLAMA_VOCAB_PRE_TYPE_MPT', 'LLAMA_VOCAB_PRE_TYPE_OLMO',
+    'LLAMA_VOCAB_PRE_TYPE_PIXTRAL', 'LLAMA_VOCAB_PRE_TYPE_PORO',
+    'LLAMA_VOCAB_PRE_TYPE_QWEN2', 'LLAMA_VOCAB_PRE_TYPE_REFACT',
+    'LLAMA_VOCAB_PRE_TYPE_SEED_CODER', 'LLAMA_VOCAB_PRE_TYPE_SMAUG',
+    'LLAMA_VOCAB_PRE_TYPE_SMOLLM', 'LLAMA_VOCAB_PRE_TYPE_STABLELM2',
+    'LLAMA_VOCAB_PRE_TYPE_STARCODER', 'LLAMA_VOCAB_PRE_TYPE_SUPERBPE',
+    'LLAMA_VOCAB_PRE_TYPE_TEKKEN', 'LLAMA_VOCAB_PRE_TYPE_TRILLION',
+    'LLAMA_VOCAB_PRE_TYPE_VIKING', 'LLAMA_VOCAB_TYPE_BPE',
+    'LLAMA_VOCAB_TYPE_NONE', 'LLAMA_VOCAB_TYPE_RWKV',
+    'LLAMA_VOCAB_TYPE_SPM', 'LLAMA_VOCAB_TYPE_UGM',
+    'LLAMA_VOCAB_TYPE_WPM', 'fmt_size', 'ggml_abort',
+    'ggml_abort_callback', 'ggml_abs', 'ggml_abs_inplace', 'ggml_acc',
+    'ggml_acc_impl', 'ggml_acc_inplace', 'ggml_acc_or_set',
+    'ggml_add', 'ggml_add1', 'ggml_add1_impl', 'ggml_add1_inplace',
+    'ggml_add1_or_set', 'ggml_add_cast', 'ggml_add_cast_impl',
+    'ggml_add_impl', 'ggml_add_inplace', 'ggml_add_or_set',
+    'ggml_add_rel_pos', 'ggml_add_rel_pos_impl',
+    'ggml_add_rel_pos_inplace', 'ggml_aligned_free',
+    'ggml_aligned_malloc', 'ggml_arange', 'ggml_are_same_layout',
+    'ggml_are_same_shape', 'ggml_are_same_stride', 'ggml_argmax',
+    'ggml_argsort', 'ggml_backend', 'ggml_backend_alloc_buffer',
     'ggml_backend_alloc_ctx_tensors',
     'ggml_backend_alloc_ctx_tensors_from_buft', 'ggml_backend_buffer',
     'ggml_backend_buffer_clear', 'ggml_backend_buffer_copy_tensor',
@@ -4215,14 +5783,20 @@ __all__ = \
     'ggml_numa_init', 'ggml_numa_strategy', 'ggml_object',
     'ggml_object_p', 'ggml_object_type', 'ggml_op', 'ggml_op_desc',
     'ggml_op_name', 'ggml_op_pool', 'ggml_op_symbol',
-    'ggml_opt_step_adamw', 'ggml_out_prod', 'ggml_pad',
-    'ggml_pad_reflect_1d', 'ggml_permute', 'ggml_pool_1d',
-    'ggml_pool_2d', 'ggml_pool_2d_back', 'ggml_prec',
-    'ggml_print_backtrace', 'ggml_print_backtrace_symbols',
-    'ggml_print_object', 'ggml_print_objects', 'ggml_quantize_chunk',
-    'ggml_quantize_free', 'ggml_quantize_init',
-    'ggml_quantize_requires_imatrix', 'ggml_relu',
-    'ggml_relu_inplace', 'ggml_repeat', 'ggml_repeat_4d',
+    'ggml_opt_context', 'ggml_opt_context_p', 'ggml_opt_dataset',
+    'ggml_opt_dataset_p', 'ggml_opt_dataset_t',
+    'ggml_opt_epoch_callback', 'ggml_opt_optimizer_params',
+    'ggml_opt_optimizer_params_adamw',
+    'ggml_opt_optimizer_params_adamw_p',
+    'ggml_opt_optimizer_params_p', 'ggml_opt_result',
+    'ggml_opt_result_p', 'ggml_opt_result_t', 'ggml_opt_step_adamw',
+    'ggml_out_prod', 'ggml_pad', 'ggml_pad_reflect_1d',
+    'ggml_permute', 'ggml_pool_1d', 'ggml_pool_2d',
+    'ggml_pool_2d_back', 'ggml_prec', 'ggml_print_backtrace',
+    'ggml_print_backtrace_symbols', 'ggml_print_object',
+    'ggml_print_objects', 'ggml_quantize_chunk', 'ggml_quantize_free',
+    'ggml_quantize_init', 'ggml_quantize_requires_imatrix',
+    'ggml_relu', 'ggml_relu_inplace', 'ggml_repeat', 'ggml_repeat_4d',
     'ggml_repeat_back', 'ggml_reset', 'ggml_reshape',
     'ggml_reshape_1d', 'ggml_reshape_2d', 'ggml_reshape_3d',
     'ggml_reshape_4d', 'ggml_rms_norm', 'ggml_rms_norm_back',
@@ -4275,7 +5849,121 @@ __all__ = \
     'ggml_view_tensor', 'ggml_visit_parents', 'ggml_win_part',
     'ggml_win_unpart', 'graph_copy_dup_tensor',
     'graph_copy_init_tensor', 'incr_ptr_aligned', 'int32_t',
-    'int64_t', 'size_t', 'struct__0', 'struct__IO_FILE',
-    'struct__IO_codecvt', 'struct__IO_marker', 'struct__IO_wide_data',
+    'int64_t', 'llama_adapter_lora_free', 'llama_adapter_lora_init',
+    'llama_add_bos_token', 'llama_add_eos_token',
+    'llama_apply_adapter_cvec', 'llama_attach_threadpool',
+    'llama_attention_type', 'llama_backend_free',
+    'llama_backend_init', 'llama_batch', 'llama_batch_free',
+    'llama_batch_get_one', 'llama_batch_init',
+    'llama_chat_apply_template', 'llama_chat_builtin_templates',
+    'llama_chat_message', 'llama_clear_adapter_lora',
+    'llama_context_default_params', 'llama_copy_state_data',
+    'llama_decode', 'llama_detach_threadpool', 'llama_detokenize',
+    'llama_encode', 'llama_free', 'llama_free_model', 'llama_ftype',
+    'llama_get_embeddings', 'llama_get_embeddings_ith',
+    'llama_get_embeddings_seq', 'llama_get_kv_self',
+    'llama_get_logits', 'llama_get_logits_ith', 'llama_get_model',
+    'llama_get_state_size', 'llama_init_from_model',
+    'llama_kv_self_can_shift', 'llama_kv_self_clear',
+    'llama_kv_self_defrag', 'llama_kv_self_n_tokens',
+    'llama_kv_self_seq_add', 'llama_kv_self_seq_cp',
+    'llama_kv_self_seq_div', 'llama_kv_self_seq_keep',
+    'llama_kv_self_seq_pos_max', 'llama_kv_self_seq_pos_min',
+    'llama_kv_self_seq_rm', 'llama_kv_self_update',
+    'llama_kv_self_used_cells', 'llama_load_model_from_file',
+    'llama_load_session_file', 'llama_log_set', 'llama_logit_bias',
+    'llama_max_devices', 'llama_max_parallel_sequences',
+    'llama_model_chat_template', 'llama_model_decoder_start_token',
+    'llama_model_default_params', 'llama_model_desc',
+    'llama_model_free', 'llama_model_get_vocab',
+    'llama_model_has_decoder', 'llama_model_has_encoder',
+    'llama_model_is_recurrent', 'llama_model_kv_override_type',
+    'llama_model_load_from_file', 'llama_model_load_from_splits',
+    'llama_model_meta_count', 'llama_model_meta_key_by_index',
+    'llama_model_meta_val_str', 'llama_model_meta_val_str_by_index',
+    'llama_model_n_ctx_train', 'llama_model_n_embd',
+    'llama_model_n_head', 'llama_model_n_head_kv',
+    'llama_model_n_layer', 'llama_model_n_params',
+    'llama_model_quantize', 'llama_model_quantize_default_params',
+    'llama_model_quantize_params',
+    'llama_model_rope_freq_scale_train', 'llama_model_rope_type',
+    'llama_model_save_to_file', 'llama_model_size', 'llama_n_batch',
+    'llama_n_ctx', 'llama_n_ctx_train', 'llama_n_embd',
+    'llama_n_head', 'llama_n_layer', 'llama_n_seq_max',
+    'llama_n_threads', 'llama_n_threads_batch', 'llama_n_ubatch',
+    'llama_n_vocab', 'llama_new_context_with_model',
+    'llama_numa_init', 'llama_opt_epoch', 'llama_opt_init',
+    'llama_opt_param_filter', 'llama_opt_param_filter_all',
+    'llama_perf_context', 'llama_perf_context_print',
+    'llama_perf_context_reset', 'llama_perf_sampler',
+    'llama_perf_sampler_print', 'llama_perf_sampler_reset',
+    'llama_pooling_type', 'llama_pos', 'llama_print_system_info',
+    'llama_progress_callback', 'llama_rm_adapter_lora',
+    'llama_rope_scaling_type', 'llama_rope_type',
+    'llama_sampler_accept', 'llama_sampler_apply',
+    'llama_sampler_chain_add', 'llama_sampler_chain_default_params',
+    'llama_sampler_chain_get', 'llama_sampler_chain_init',
+    'llama_sampler_chain_n', 'llama_sampler_chain_params',
+    'llama_sampler_chain_remove', 'llama_sampler_clone',
+    'llama_sampler_context_t', 'llama_sampler_free',
+    'llama_sampler_get_seed', 'llama_sampler_init',
+    'llama_sampler_init_dist', 'llama_sampler_init_dry',
+    'llama_sampler_init_grammar', 'llama_sampler_init_grammar_lazy',
+    'llama_sampler_init_grammar_lazy_patterns',
+    'llama_sampler_init_greedy', 'llama_sampler_init_infill',
+    'llama_sampler_init_logit_bias', 'llama_sampler_init_min_p',
+    'llama_sampler_init_mirostat', 'llama_sampler_init_mirostat_v2',
+    'llama_sampler_init_penalties', 'llama_sampler_init_softmax',
+    'llama_sampler_init_temp', 'llama_sampler_init_temp_ext',
+    'llama_sampler_init_top_k', 'llama_sampler_init_top_n_sigma',
+    'llama_sampler_init_top_p', 'llama_sampler_init_typical',
+    'llama_sampler_init_xtc', 'llama_sampler_name',
+    'llama_sampler_reset', 'llama_sampler_sample',
+    'llama_save_session_file', 'llama_seq_id',
+    'llama_set_abort_callback', 'llama_set_adapter_lora',
+    'llama_set_causal_attn', 'llama_set_embeddings',
+    'llama_set_n_threads', 'llama_set_state_data', 'llama_set_warmup',
+    'llama_split_mode', 'llama_split_path', 'llama_split_prefix',
+    'llama_state_get_data', 'llama_state_get_size',
+    'llama_state_load_file', 'llama_state_save_file',
+    'llama_state_seq_get_data', 'llama_state_seq_get_size',
+    'llama_state_seq_load_file', 'llama_state_seq_save_file',
+    'llama_state_seq_set_data', 'llama_state_set_data',
+    'llama_supports_gpu_offload', 'llama_supports_mlock',
+    'llama_supports_mmap', 'llama_supports_rpc', 'llama_synchronize',
+    'llama_time_us', 'llama_token', 'llama_token_attr',
+    'llama_token_bos', 'llama_token_cls', 'llama_token_data',
+    'llama_token_data_array', 'llama_token_eos', 'llama_token_eot',
+    'llama_token_fim_mid', 'llama_token_fim_pad',
+    'llama_token_fim_pre', 'llama_token_fim_rep',
+    'llama_token_fim_sep', 'llama_token_fim_suf',
+    'llama_token_get_attr', 'llama_token_get_score',
+    'llama_token_get_text', 'llama_token_is_control',
+    'llama_token_is_eog', 'llama_token_nl', 'llama_token_pad',
+    'llama_token_sep', 'llama_token_to_piece', 'llama_token_type',
+    'llama_tokenize', 'llama_vocab_bos', 'llama_vocab_cls',
+    'llama_vocab_eos', 'llama_vocab_eot', 'llama_vocab_fim_mid',
+    'llama_vocab_fim_pad', 'llama_vocab_fim_pre',
+    'llama_vocab_fim_rep', 'llama_vocab_fim_sep',
+    'llama_vocab_fim_suf', 'llama_vocab_get_add_bos',
+    'llama_vocab_get_add_eos', 'llama_vocab_get_attr',
+    'llama_vocab_get_score', 'llama_vocab_get_text',
+    'llama_vocab_is_control', 'llama_vocab_is_eog',
+    'llama_vocab_n_tokens', 'llama_vocab_nl', 'llama_vocab_pad',
+    'llama_vocab_pre_type', 'llama_vocab_sep', 'llama_vocab_type',
+    'size_t', 'struct__0', 'struct__IO_FILE', 'struct__IO_codecvt',
+    'struct__IO_marker', 'struct__IO_wide_data',
     'struct___va_list_tag', 'struct_c__SA_ggml_bf16_t',
-    'struct_hash_map', 'uint8_t', 'va_list']
+    'struct_hash_map', 'struct_llama_adapter_lora',
+    'struct_llama_batch', 'struct_llama_chat_message',
+    'struct_llama_context', 'struct_llama_context_params',
+    'struct_llama_kv_cache', 'struct_llama_logit_bias',
+    'struct_llama_model', 'struct_llama_model_kv_override',
+    'struct_llama_model_params', 'struct_llama_model_quantize_params',
+    'struct_llama_model_tensor_buft_override',
+    'struct_llama_opt_params', 'struct_llama_perf_context_data',
+    'struct_llama_perf_sampler_data', 'struct_llama_sampler',
+    'struct_llama_sampler_chain_params', 'struct_llama_sampler_i',
+    'struct_llama_token_data', 'struct_llama_token_data_array',
+    'struct_llama_vocab', 'uint32_t', 'uint64_t', 'uint8_t',
+    'union_llama_model_kv_override_0', 'va_list']

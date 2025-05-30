@@ -14,10 +14,18 @@ license = "MIT"
 readme = "README.md"
 requires-python = ">=3.8"
 dependencies = [
-    "numpy",
-    "transformers",
-    "lark",
-    "matplotlib"
+    "numpy>=2.2.6",
+    "transformers>=4.52.3",
+    "jinja2>=3.1.6",
+    "lark>=1.2.2",
+    "matplotlib",
+    "gguf>=0.17.0"
+]
+
+[project.optional-dependencies]
+gen = [
+    "ctypeslib2 @ git+https://github.com/acon96/ctypeslib-ggml.git",
+    "clang==14"
 ]
 
 [project.urls]

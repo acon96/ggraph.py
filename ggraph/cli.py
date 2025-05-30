@@ -41,7 +41,7 @@ def main():
     parser = argparse.ArgumentParser(description="Run inference with a GGUF model.")
     parser.add_argument("--model", "-m", type=str, help="Path to the GGUF model file.", required=True)
     parser.add_argument("--debug", action="store_true", help="Enable debug logging.")
-    parser.add_argument("--backend", "-b", type=str, choices=["cpu", "cuda", "rocm"], default="cpu",
+    parser.add_argument("--backend", "-b", type=str, choices=["cpu", "cuda", "vulkan"], default="cpu",
                         help="Backend to use for inference (default: cpu).")
     parser.add_argument("--n_ctx", "-c", type=int, default=256, help="Context size for the model (default: 256).")
     parser.add_argument("--n_threads", "-t", type=int, default=os.cpu_count(), help="Number of threads to use for inference (default: all cores).")
@@ -70,10 +70,22 @@ def main():
         {"role": "system", "content": args.conversation_system},
     ]
 
-    try:
-        inference_engine = GGMLInferenceEngine(args.model, n_ctx=args.n_ctx, n_threads=args.n_threads)
-        logger.info("Generating output...")
+    engine_kwargs = {}
 
+    match args.backend:
+        case "cpu":
+            engine_kwargs["backend_type"] = GGMLBackendType.CPU
+            engine_kwargs["n_threads"] = args.n_threads
+        case "cuda":
+            engine_kwargs["backend_type"] = GGMLBackendType.CUDA
+        case "vulkan":
+            engine_kwargs["backend_type"] = GGMLBackendType.VULKAN
+        case _:
+            raise ValueError(f"Invalid backend type: {args.backend}")
+
+    try:
+        inference_engine = GGMLInferenceEngine(args.model, n_ctx=args.n_ctx, **engine_kwargs)
+        
         if args.interactive:
             logger.info("Entering interactive mode. Type 'exit' to quit.")
             while True:
@@ -81,9 +93,11 @@ def main():
                 if user_input.lower() == "exit":
                     break
                 input_conversation.append({"role": "user", "content": user_input})
+                print("Assistant: ", end="")
                 assistant_response = generate_assistant_conversation_turn(inference_engine, input_conversation, args.stream)
                 input_conversation.append({"role": "assistant", "content": assistant_response})
         else:
+            logger.info("Generating output...")
             input_conversation.append({"role": "user", "content": args.conversation_user})
             generate_assistant_conversation_turn(inference_engine, input_conversation, args.stream)
 

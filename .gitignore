@@ -3,3 +3,5 @@ __pycache__
 *.png
 /models/
 *.egg-info
+*.code-workspace
+.vscode/

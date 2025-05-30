@@ -8,9 +8,10 @@ import matplotlib.pyplot as plt
 from lark import Token
 import numpy as np
 from gguf.gguf_reader import ReaderField, ReaderTensor
-from gguf.constants import Keys as GGUFKeys
+from gguf.constants import Keys as GGUFKeys, RopeScalingType
 
 from ggraph.wrapper import Tensor
+from ggraph.wrapper.gen import LLAMA_ROPE_SCALING_TYPE_NONE, LLAMA_ROPE_SCALING_TYPE_LINEAR, LLAMA_ROPE_SCALING_TYPE_YARN, LLAMA_ROPE_SCALING_TYPE_LONGROPE, LLAMA_ROPE_SCALING_TYPE_UNSPECIFIED
 
 matplotlib.use("agg")
 
@@ -141,7 +142,19 @@ class ModelParams:
     
     @property
     def rope_scaling_type(self) -> int:
-        return int(self.get(GGUFKeys.Rope.SCALING_TYPE, 1))
+        match self.get(GGUFKeys.Rope.SCALING_TYPE, "").upper():
+            case "":
+                return LLAMA_ROPE_SCALING_TYPE_UNSPECIFIED
+            case RopeScalingType.NONE.name:
+                return LLAMA_ROPE_SCALING_TYPE_NONE
+            case RopeScalingType.LINEAR.name:
+                return LLAMA_ROPE_SCALING_TYPE_LINEAR
+            case RopeScalingType.YARN.name:
+                return LLAMA_ROPE_SCALING_TYPE_YARN
+            case RopeScalingType.LONGROPE.name:
+                return LLAMA_ROPE_SCALING_TYPE_LONGROPE
+            case _:
+                raise ParseError(f"Unknown rope scaling type: {self.get(GGUFKeys.Rope.SCALING_TYPE)}", None)
     
     @property
     def rope_attn_factor(self) -> float:
