@@ -9,7 +9,6 @@ from ggraph.inference_engine import GGMLInferenceEngine
 logger: logging.Logger = None
 
 def generate_assistant_conversation_turn(inference_engine: GGMLInferenceEngine, input_conversation: list[dict[str, str]], stream_output: bool):
-    logger.info("Generating output...")
     start_time = time.time()
 
     if stream_output:
@@ -60,7 +59,7 @@ def main():
     args = parser.parse_args()
 
     if args.debug:
-        logging.basicConfig(level=logging.INFO)
+        logging.basicConfig(level=logging.DEBUG)
     else:
         logging.basicConfig(level=logging.INFO)
 

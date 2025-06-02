@@ -1,19 +1,33 @@
 
 from __future__ import annotations
-from typing import Optional, Dict, List, Union, TypeAlias, Any, TypeVar
+from typing import Optional, Dict, List, Union, TypeAlias, Any, TypeVar, Mapping
 from dataclasses import dataclass, field
+from functools import cache, cached_property
+from datetime import datetime
+import logging
+import json
 
+import jinja2
+from jinja2.sandbox import SandboxedEnvironment
+from jinja2.ext import loopcontrols
 import matplotlib
 import matplotlib.pyplot as plt
 from lark import Token
 import numpy as np
 from gguf.gguf_reader import ReaderField, ReaderTensor
-from gguf.constants import Keys as GGUFKeys, RopeScalingType
+from gguf.constants import Keys as GGUFKeys, RopeScalingType, TokenType
+from tokenizers import Tokenizer, Regex, SplitDelimiterBehavior, Encoding, AddedToken
+from tokenizers.implementations import ByteLevelBPETokenizer
+from tokenizers.models import BPE, WordPiece, Unigram
+from tokenizers.decoders import BPEDecoder
+from tokenizers.pre_tokenizers import PreTokenizer, Split, Sequence
 
 from ggraph.wrapper import Tensor
 from ggraph.wrapper.gen import LLAMA_ROPE_SCALING_TYPE_NONE, LLAMA_ROPE_SCALING_TYPE_LINEAR, LLAMA_ROPE_SCALING_TYPE_YARN, LLAMA_ROPE_SCALING_TYPE_LONGROPE, LLAMA_ROPE_SCALING_TYPE_UNSPECIFIED
 
 matplotlib.use("agg")
+
+logger = logging.getLogger(__name__)
 
 class ParseError(Exception):
     def __init__(self, message: str, token: Token | None):
@@ -65,6 +79,40 @@ class BatchParams:
         ) if isinstance(other, BatchParams) else False
 
 GraphArg: TypeAlias = Union[Tensor, int, str]
+
+def build_pre_tokenizer_patterns(patterns: Dict[str, List[str]], aliases: Dict[str, str]) -> Mapping[str, PreTokenizer]:
+    """
+    Builds a dictionary of pre-tokenizer patterns from a dictionary of string patterns.
+    """
+    pre_tokenizers = {
+        key: Sequence([
+            Split(pattern=Regex(pattern), behavior=SplitDelimiterBehavior.ISOLATED.value) for pattern in patterns
+        ]) for key, patterns in patterns.items()
+    }
+    # Add aliases to the base patterns
+    for alias, base in aliases.items():
+        if alias in pre_tokenizers:
+            raise ValueError(f"Alias '{alias}' conflicts with an existing pattern.")
+        pre_tokenizers[alias] = pre_tokenizers[base]
+    return pre_tokenizers
+
+PRE_TOKENIZER_PATTERNS = build_pre_tokenizer_patterns(
+    {
+        "default": [r"[\\p{P}\\$\\+<=>\\^~\\|]+",
+                    r"'s|'t|'re|'ve|'m|'ll|'d| ?\\p{L}+| ?\\p{N}+| ?[^\\s\\p{L}\\p{N}]+|\\s+(?!\\S)",
+                    r"\\p{N}+",
+                    r"[0-9][0-9][0-9]"],
+        "llama3": [r"(?:'[sS]|'[tT]|'[rR][eE]|'[vV][eE]|'[mM]|'[lL][lL]|'[dD])|[^\\r\\n\\p{L}\\p{N}]?\\p{L}+|\\p{N}{1,3}| ?[^\\s\\p{L}\\p{N}]+[\\r\\n]*|\\s*[\\r\\n]+|\\s+(?!\\S)|\\s+"],
+        "gpt2": [r"'s|'t|'re|'ve|'m|'ll|'d| ?\\p{L}+| ?\\p{N}+| ?[^\\s\\p{L}\\p{N}]+|\\s+(?!\\S)"],
+        "qwen2": [r"(?:'[sS]|'[tT]|'[rR][eE]|'[vV][eE]|'[mM]|'[lL][lL]|'[dD])|[^\\r\\n\\p{L}\\p{N}]?\\p{L}+|\\p{N}| ?[^\\s\\p{L}\\p{N}]+[\\r\\n]*|\\s*[\\r\\n]+|\\s+(?!\\S)|\\s+",]
+    },
+    {
+        "stablelm2": "qwen2",
+        "deepseek-r1-qwen": "qwen2",
+        "llama-v3": "llama3",
+        "llama-bpe": "llama3",
+    }
+)
 
 class ModelParams:
     """Provides an interface for consistently accessing model parameters from a GGUF file"""
@@ -183,15 +231,69 @@ class ModelParams:
     @property
     def stop_tokens(self) -> List[int]:
         stop_tokens = [
-            self.get(GGUFKeys.Tokenizer.EOS_ID, ""),
-            self.get(GGUFKeys.Tokenizer.EOT_ID, ""),
-            self.get(GGUFKeys.Tokenizer.EOM_ID, ""),
-            self.get(GGUFKeys.Tokenizer.PAD_ID, ""),
-            self.get(GGUFKeys.Tokenizer.SEP_ID, ""),
-            self.get(GGUFKeys.Tokenizer.UNK_ID, ""),
-            self.get(GGUFKeys.Tokenizer.MASK_ID, ""),
+            self.get(GGUFKeys.Tokenizer.EOS_ID, -1),
+            self.get(GGUFKeys.Tokenizer.EOT_ID, -1),
+            self.get(GGUFKeys.Tokenizer.EOM_ID, -1),
+            self.get(GGUFKeys.Tokenizer.PAD_ID, -1),
+            self.get(GGUFKeys.Tokenizer.SEP_ID, -1),
+            self.get(GGUFKeys.Tokenizer.UNK_ID, -1),
+            self.get(GGUFKeys.Tokenizer.MASK_ID, -1),
         ]
-        return [int(token) for token in stop_tokens if isinstance(token, int) or token.isdigit()]
+        return [int(token) for token in stop_tokens if isinstance(token, int) or token.isdigit() and int(token) >= 0]
+    
+    @property
+    def special_tokens(self) -> Dict[str, str]:
+        special_tokens_map: Dict[str, int | str] = {
+            "bos_token": self.get(GGUFKeys.Tokenizer.BOS_ID, -1),
+            "eos_token": self.get(GGUFKeys.Tokenizer.EOS_ID, -1),
+            "unk_token": self.get(GGUFKeys.Tokenizer.UNK_ID, self.get(GGUFKeys.Tokenizer.PAD_ID, 0)),
+            "sep_token": self.get(GGUFKeys.Tokenizer.SEP_ID, -1),
+            "pad_token": self.get(GGUFKeys.Tokenizer.PAD_ID, -1),
+            "mask_token": self.get(GGUFKeys.Tokenizer.MASK_ID, -1),
+        }
+
+        token_list = self.get(GGUFKeys.Tokenizer.LIST, [])
+        special_tokens_map = { k: token_list[v] for k, v in special_tokens_map.items() if v >= 0 }
+        return special_tokens_map
+    
+    @cached_property
+    def tokenizer(self) -> Tokenizer:
+        logger.debug("Building tokenizer...")
+
+        tokenizer_type = self.get(GGUFKeys.Tokenizer.MODEL, "no_vocab")
+        pre_tokenizer = self.get(GGUFKeys.Tokenizer.PRE, None)
+        token_list = self.get(GGUFKeys.Tokenizer.LIST, [])
+        token_types = self.get(GGUFKeys.Tokenizer.TOKEN_TYPE, [])
+
+        base_tokens = {}
+        added_tokens = []
+        special_tokens = []
+        for idx, (token, token_type) in enumerate(zip(token_list, token_types)):
+            if token_type == TokenType.NORMAL or token_type == TokenType.BYTE:
+                base_tokens[token] = idx
+            elif token_type == TokenType.USER_DEFINED or token_type == TokenType.CONTROL:
+                add_to = special_tokens if token_type == TokenType.CONTROL else added_tokens
+                add_to.append(AddedToken(content=token, lstrip=False, rstrip=False, normalized=False, special=token_type == TokenType.CONTROL))
+            
+        merges = [ tuple(merge.split(" ")) for merge in self.get(GGUFKeys.Tokenizer.MERGES, []) if len(merge.split(" ")) == 2]
+
+        if tokenizer_type == "gpt2":
+            tokenizer = ByteLevelBPETokenizer(
+                vocab=base_tokens, merges=merges,
+            )
+            # tokenizer.pre_tokenizer = PRE_TOKENIZER_PATTERNS.get(pre_tokenizer, PRE_TOKENIZER_PATTERNS["default"])
+            
+        # elif tokenizer_type == "bert":
+        #     tokenizer = Tokenizer(WordPiece(vocab=base_tokens, unk_token=unk_token, max_input_chars_per_word=100))
+        # elif tokenizer_type == "t5":
+        #     tokenizer = Tokenizer(Unigram(vocab=base_tokens, unk_id=unk_token, byte_fallback=True))
+        else:
+            raise ValueError(f"Unsupported tokenizer type: {tokenizer_type}")
+        
+        tokenizer.add_special_tokens(special_tokens)
+        tokenizer.add_tokens(added_tokens)
+        
+        return tokenizer
 
     
     def to_default_ggml_context_params_dict(self) -> Dict[str, Any]:
@@ -202,7 +304,75 @@ class ModelParams:
             rope_freq_scale=self.rope_freq_scale,
             rope_scaling_type=self.rope_scaling_type,
         )
+
+@cache
+def compile_jinja_template(template: str) -> jinja2.Template:
+    """
+    Compiles a Jinja2 template string into a Template object.
     
+    Args:
+        template: The Jinja2 template string to compile.
+        
+    Returns:
+        A compiled Jinja2 Template object.
+    """
+    env = SandboxedEnvironment(trim_blocks=True, lstrip_blocks=True, extensions=[loopcontrols])
+
+    def raise_exception(message):
+        raise jinja2.exceptions.TemplateError(message)
+
+    def tojson(x, ensure_ascii=False, indent=None, separators=None, sort_keys=False):
+        # We override the built-in tojson filter because Jinja's default filter escapes HTML characters
+        # We also expose some options like custom indents and separators
+        return json.dumps(x, ensure_ascii=ensure_ascii, indent=indent, separators=separators, sort_keys=sort_keys)
+
+    def strftime_now(format):
+        return datetime.now().strftime(format)
+    
+    env.filters["tojson"] = tojson
+    env.globals["raise_exception"] = raise_exception
+    env.globals["strftime_now"] = strftime_now
+    
+    return env.from_string(template)
+
+def render_chat_with_jinja(
+        tokenizer: Tokenizer, 
+        conversation: List[Dict[str, str]], 
+        chat_template: str, 
+        tools: Optional[List[Dict]] = None,
+        documents: Optional[List[Dict]] = None,
+        add_generation_prompt: bool = True,
+        chat_template_kwargs: Optional[Dict[str, Any]] = None) -> List[int]:
+    """
+    Renders a conversation using a jinja2 chat template, returning the tokenized input IDs.
+    
+    Args:
+        tokenizer: The tokenizer to use for encoding.
+        conversation: A list of dictionaries representing the conversation.
+        chat_template: The Jinja2 template string to apply to the conversation.
+        tools: Optional list of tools to include in the conversation.
+        documents: Optional list of documents to include in the conversation.
+        add_generation_prompt: Whether to add a generation prompt at the end.
+        chat_template_kwargs: Additional keyword arguments to pass to the template.
+        
+    Returns:
+        A list of token IDs representing the conversation.
+    """
+    jinja_template = compile_jinja_template(chat_template)    
+
+    rendered_chat = jinja_template.render(
+        messages=conversation,
+        tools=tools,
+        documents=documents,
+        add_generation_prompt=add_generation_prompt,
+        **(chat_template_kwargs or {})
+    )
+
+    logger.debug(f"Rendered chat template: {rendered_chat}")
+
+    encoding: Encoding = tokenizer.encode(rendered_chat)
+    return encoding.ids
+
 def ensure_args(function_name: str, args: List[Tensor | int | float | str | None], types: List[type], token: Token) -> None:
     if len(args) != len(types):
         raise ParseError(f"Error in function call '{function_name}'. Expected {len(types)} arguments but got {len(args)}", token)

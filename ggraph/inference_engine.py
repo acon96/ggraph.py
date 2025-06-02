@@ -3,7 +3,9 @@ from dataclasses import dataclass
 import logging
 import numpy as np
 from ggraph.models import GGMLModel
-from transformers.tokenization_utils import PreTrainedTokenizerBase
+from tokenizers import Tokenizer, Encoding
+
+from ggraph.utils import render_chat_with_jinja
 
 logger = logging.getLogger(__name__)
 
@@ -50,11 +52,6 @@ def sample_from_logits(logits: np.ndarray, *, temperature: float, top_p: float, 
     probs /= np.sum(probs, axis=-1, keepdims=True)
     return np.random.choice(len(probs), p=probs)
 
-model_arch_to_tokenizer = {
-    "qwen2": ("qwen2", "Qwen2TokenizerFast", "Qwen/Qwen-tokenizer"),
-    "qwen3": ("qwen2", "Qwen2TokenizerFast", "Qwen/Qwen-tokenizer"),
-}
-
 @dataclass(kw_only=True)
 class InferenceResult:
     """Result of the inference."""
@@ -67,34 +64,18 @@ class GGMLInferenceEngine:
     """Inference engine for GGML models."""
 
     model: GGMLModel
-    tokenizer: Optional[PreTrainedTokenizerBase]
+    tokenizer: Optional[Tokenizer]
+    chat_template: Optional[str] = None
 
     def __init__(self, gguf_path: str, n_ctx: int = 32, **kwargs):
         self.model = GGMLModel(gguf_path, n_ctx=n_ctx, **kwargs)
         
         # map and load tokenizer
-        tokenizer_args = model_arch_to_tokenizer.get(self.model.model_params.arch, None)
-        if tokenizer_args is None:
-            raise ValueError(f"Unknown tokenizer for model architecture: {self.model.model_params.arch}")
-        
-        tokenizer_package, tokenizer_class, tokenizer_path = tokenizer_args
-        try:
-            tokenizer_class = getattr(__import__(f"transformers.models.{tokenizer_package}"), tokenizer_class)
-        except ImportError:
-            raise ImportError(f"Tokenizer class {tokenizer_class} not found in transformers library.")
-        try:
-            tokenizer = tokenizer_class.from_pretrained(tokenizer_path, use_fast=True)
-        except Exception as e:
-            raise RuntimeError(f"Failed to load tokenizer from {tokenizer_path}: {e}")
-        if not isinstance(tokenizer, PreTrainedTokenizerBase):
-            raise TypeError(f"Expected tokenizer to be a subclass of PreTrainedTokenizerBase, got {type(tokenizer)}")
-        logger.debug(f"Loaded tokenizer: transformers.models.{tokenizer_package}.{tokenizer_class}.from_pretrained('{tokenizer_path}')")
-
-        self.tokenizer = tokenizer
+        self.tokenizer = self.model.model_params.tokenizer
 
         if self.tokenizer:
             chat_template_kv = self.model.model_params._data["tokenizer.chat_template"]
-            tokenizer.chat_template = chat_template_kv.contents()
+            self.chat_template = chat_template_kv.contents()
 
     def _get_tokens(self, *,
                     input_prompt: Optional[str] = None,
@@ -102,12 +83,21 @@ class GGMLInferenceEngine:
         if input_prompt is not None:
             if self.tokenizer is None:
                 raise ValueError("Tokenizer is not set.")
-            input_tokens = self.tokenizer(text=input_prompt).data["input_ids"]
+            
+            encoded: Encoding = self.tokenizer.encode(input_prompt)
+            input_tokens = encoded.ids
 
         elif input_conversation is not None:
             if self.tokenizer is None:
                 raise ValueError("Tokenizer is not set.")
-            input_tokens = self.tokenizer.apply_chat_template(input_conversation, add_generation_prompt=True)
+            if self.chat_template is None:
+                raise ValueError("Chat template is not set.")
+            
+            chat_template_kwargs = { **self.model.model_params.special_tokens }
+            
+            input_tokens = render_chat_with_jinja(
+                self.tokenizer, conversation=input_conversation, chat_template=self.chat_template,
+                add_generation_prompt=True, chat_template_kwargs=chat_template_kwargs)
         else:
             raise ValueError("Either input_prompt or input_conversation must be provided.")
 
@@ -155,14 +145,14 @@ class GGMLInferenceEngine:
 
         last_output = self._process_prompt(input_ids, kq_mask)
         outputs = [last_output]
-        yield self.tokenizer.decode([last_output])
+        yield self.tokenizer.decode([last_output], skip_special_tokens=True)
 
         # process next tokens one by one
         while len(input_ids) + len(outputs) < n_ctx and last_output not in stop_tokens:
             cur_pos = len(input_ids) + len(outputs) - 1
             last_output = self._generate_token(last_output, cur_pos, kq_mask)
             outputs.append(last_output)
-            yield self.tokenizer.decode([last_output])
+            yield self.tokenizer.decode([last_output], skip_special_tokens=True)
 
 
     def generate(self, *, 
@@ -189,10 +179,10 @@ class GGMLInferenceEngine:
             outputs.append(last_output)
 
         if input_conversation is not None:
-            output_text = self.tokenizer.decode(outputs)
+            output_text = self.tokenizer.decode(outputs, skip_special_tokens=True)
             output_conversation = input_conversation.copy()
             output_conversation.append({"role": "assistant", "content": output_text})
             return InferenceResult(generated_tokens=outputs, num_generated_tokens=len(outputs), generated_text=output_text, conversation=output_conversation)
         
-        output_text = self.tokenizer.decode(outputs)
+        output_text = self.tokenizer.decode(outputs, skip_special_tokens=True)
         return InferenceResult(generated_tokens=outputs, num_generated_tokens=len(outputs), generated_text=output_text)
