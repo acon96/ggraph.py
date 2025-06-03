@@ -37,7 +37,7 @@ where = ["."]
 include = ["ggraph*"]
 
 [tool.setuptools.package-data]
-ggraph = ["*.ggml"]
+ggraph = ["*.ggraph"]
 
 [project.scripts]
 ggraph-cli = "ggraph.cli:main"

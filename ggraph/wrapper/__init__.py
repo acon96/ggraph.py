@@ -328,6 +328,7 @@ def view_1d(ctx0: ggml_context_p, result_name: str, a: Tensor, ne: int, offset: 
     return Tensor.from_tensor_ptr(result_name, ggml_view_1d(ctx0, a.ptr, ne, offset))
 
 def view_2d(ctx0: ggml_context_p, result_name: str, a: Tensor, ne0: int, ne1: int, nb1: int, offset: int):
+    # logging.debug(f"{a.name} [{a.shape}] ({list(a.ptr.contents.nb)}) view_2d: ne0={ne0}, ne1={ne1}, nb1={nb1}, offset={offset} total_bytes={ggml_nbytes(a.ptr)}")
     return Tensor.from_tensor_ptr(result_name, ggml_view_2d(ctx0, a.ptr, ne0, ne1, nb1, offset))
 
 def view_3d(ctx0: ggml_context_p, result_name: str, a: Tensor, ne0: int, ne1: int, ne2: int, nb1: int, nb2: int, offset: int):

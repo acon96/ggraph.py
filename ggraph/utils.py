@@ -17,9 +17,7 @@ import numpy as np
 from gguf.gguf_reader import ReaderField, ReaderTensor
 from gguf.constants import Keys as GGUFKeys, RopeScalingType, TokenType
 from tokenizers import Tokenizer, Regex, SplitDelimiterBehavior, Encoding, AddedToken
-from tokenizers.implementations import ByteLevelBPETokenizer
-from tokenizers.models import BPE, WordPiece, Unigram
-from tokenizers.decoders import BPEDecoder
+from tokenizers.implementations import ByteLevelBPETokenizer, SentencePieceUnigramTokenizer
 from tokenizers.pre_tokenizers import PreTokenizer, Split, Sequence
 
 from ggraph.wrapper import Tensor
@@ -278,11 +276,10 @@ class ModelParams:
         merges = [ tuple(merge.split(" ")) for merge in self.get(GGUFKeys.Tokenizer.MERGES, []) if len(merge.split(" ")) == 2]
 
         if tokenizer_type == "gpt2":
-            tokenizer = ByteLevelBPETokenizer(
-                vocab=base_tokens, merges=merges,
-            )
+            tokenizer = ByteLevelBPETokenizer(vocab=base_tokens, merges=merges)
             # tokenizer.pre_tokenizer = PRE_TOKENIZER_PATTERNS.get(pre_tokenizer, PRE_TOKENIZER_PATTERNS["default"])
-            
+        elif tokenizer_type == "llama":
+            tokenizer = SentencePieceUnigramTokenizer(vocab=list(base_tokens.items()))
         # elif tokenizer_type == "bert":
         #     tokenizer = Tokenizer(WordPiece(vocab=base_tokens, unk_token=unk_token, max_input_chars_per_word=100))
         # elif tokenizer_type == "t5":

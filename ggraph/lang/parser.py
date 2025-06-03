@@ -9,7 +9,7 @@ from gguf import ReaderTensor
 
 from ggraph.utils import ParseError
 from ggraph.models import ContextParams, ModelParams
-from ggraph.models.ast import ASTNode, Expression, Assignment, RepeatBlock, FunctionCall, Operand, Operation
+from ggraph.lang.ast import ASTNode, Expression, Assignment, RepeatBlock, FunctionCall, Operand, Operation
 from ggraph.wrapper import gen
 
 logger = logging.getLogger(__name__)
@@ -85,7 +85,7 @@ class ParseContext:
 
 class GGMLParser:
     """
-    Parses *.ggml files based on the "GGML language" using the Lark library.
+    Parses *.ggraph files based on the "GGML language" using the Lark library.
     The "GGML language" is a custom language for representing neural network models in a string serializable format so that
     the model definition can be stored as one or more GGUF key-value pairs.
     """

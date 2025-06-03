@@ -9,8 +9,8 @@ import numpy as np
 from gguf.gguf_reader import GGUFReader
 
 from ggraph.utils import Tensor, ModelParams, ContextParams, BatchParams, ParseError
-from ggraph.models.parser import GGMLParser, ParseContext
-from ggraph.models.ast import LoweringContext, produce_ggml_graph
+from ggraph.lang.parser import GGMLParser, ParseContext
+from ggraph.lang.ast import LoweringContext, produce_ggml_graph
 import ggraph.wrapper as wrapper
 
 # from exo.inference.shard import Shard
@@ -76,7 +76,7 @@ class GGMLModel:
 
         arch = str(gguf_kv["general.architecture"].contents())
         try:
-            self.parse_context = GGMLParser().parse(os.path.join(os.path.dirname(__file__), f"{arch}.ggml"), self.context_params, self.model_params)
+            self.parse_context = GGMLParser().parse(os.path.join(os.path.dirname(__file__), f"{arch}.ggraph"), self.context_params, self.model_params)
         except ParseError as exception:
             raise RuntimeError("Failed to parse") from exception
         
@@ -177,7 +177,7 @@ class GGMLModel:
 
         try:
             for node in self.parse_context.ast:
-                produce_ggml_graph(self.lowering_context, compute_ctx.ctx, gf, node)
+                produce_ggml_graph(self.lowering_context, compute_ctx.ctx, gf, node, debug_calls=False)
         except ParseError as exception:
             raise RuntimeError("Failed to parse") from exception
 

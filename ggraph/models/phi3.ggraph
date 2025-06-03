@@ -1,11 +1,4 @@
-model Qwen2 {
-    # tokenizer {
-    #     type = transformers
-    #     package = qwen2
-    #     class_name = Qwen2TokenizerFast
-    #     repo_name = Qwen/Qwen-tokenizer
-    # }
-
+model Phi3 {
     tensors {
         input_tokens: I32, [params.batch.n_tokens], is_input
         input_positions: I32, [params.batch.n_tokens], is_input
@@ -17,24 +10,43 @@ model Qwen2 {
     graph {
         layer_input = get_rows(token_embd.weight, input_tokens)
         repeat cur_layer = params.model.n_layer {
-        # repeat cur_layer = 1 {
             self_attention_input = layer_input
 
-            # layer norm
+            # layer norm before attention
             cur = mul(rms_norm(layer_input, params.model.f_norm_rms_eps), blk.%d.attn_norm.weight)
 
-            # self attention
+            # self attention /w combined QKV projection
+            qkv = mul_mat(blk.%d.attn_qkv.weight, cur)
 
-            # project q, k, and v
-            qCur = reshape_3d(add(mul_mat(blk.%d.attn_q.weight, cur), blk.%d.attn_q.bias), params.model.n_embd_head_v, params.model.n_head, params.batch.n_tokens)
-            kCur = reshape_3d(add(mul_mat(blk.%d.attn_k.weight, cur), blk.%d.attn_k.bias), params.model.n_embd_head_v, params.model.n_head_kv, params.batch.n_tokens)
-            vCur = reshape_3d(add(mul_mat(blk.%d.attn_v.weight, cur), blk.%d.attn_v.bias), params.model.n_embd_head_v, params.model.n_head_kv, params.batch.n_tokens)
-            
-            # apply RoPE
+            # split into q, k, v
+            qCur = cont(view_2d(qkv, 
+                params.model.n_embd, params.batch.n_tokens, # shape
+                element_size(qkv) * (params.model.n_embd + params.model.n_embd_k_gqa + params.model.n_embd_k_gqa), # second dimension stride
+                0 # offset
+            ))
+            kCur = cont(view_2d(qkv,
+                params.model.n_embd_v_gqa, params.batch.n_tokens,  # shape
+                element_size(qkv) * (params.model.n_embd + params.model.n_embd_k_gqa + params.model.n_embd_v_gqa),  # second dimension stride
+                element_size(qkv) * params.model.n_embd # offset
+            ))
+            vCur = cont(view_2d(qkv, 
+                params.model.n_embd_v_gqa, params.batch.n_tokens, # shape
+                element_size(qkv) * (params.model.n_embd + params.model.n_embd_k_gqa + params.model.n_embd_v_gqa), # second dimension stride
+                element_size(qkv) * (params.model.n_embd + params.model.n_embd_k_gqa) # offset
+            ))
+
+            qCur = reshape_3d(qCur, params.model.n_embd_head_v, params.model.n_head, params.batch.n_tokens)
+            kCur = reshape_3d(kCur, params.model.n_embd_head_v, params.model.n_head_kv, params.batch.n_tokens)
+            vCur = reshape_3d(vCur, params.model.n_embd_head_v, params.model.n_head_kv, params.batch.n_tokens)
+
+            # apply RoPE to Q and K - use NEOX style rotary embeddings
             qCur = rope(qCur, input_positions, params.model.n_rot, 2, params.model.n_ctx, params.context.rope_freq_base, params.context.rope_freq_scale, params.context.yarn_ext_factor, params.context.yarn_attn_factor, params.context.yarn_beta_fast, params.context.yarn_beta_slow)
             kCur = rope(kCur, input_positions, params.model.n_rot, 2, params.model.n_ctx, params.context.rope_freq_base, params.context.rope_freq_scale, params.context.yarn_ext_factor, params.context.yarn_attn_factor, params.context.yarn_beta_fast, params.context.yarn_beta_slow)
 
-            # store roped k/v into k_cache/v_cache using token_offset
+            # apply scaling to Q
+            qCur = scale(qCur, 1.0 / sqrt(params.model.n_embd_head_k))
+
+            # store key and value into KV cache
             kView = view_1d(k_cache.%d, 
                 params.batch.n_tokens * params.model.n_embd_k_gqa,
                 row_size(k_cache.%d, params.model.n_embd_k_gqa) * params.batch.kv_output_pos
@@ -49,7 +61,7 @@ model Qwen2 {
             )
             cpy(vCur, vView)
 
-            # extract usable window from kv cache for attention
+            # get the KV cache views
             k = view_3d(k_cache.%d, 
                 params.model.n_embd_head_k, params.model.n_head_kv, params.context.n_ctx,
                 row_size(k_cache.%d, params.model.n_embd_head_k),
@@ -67,35 +79,48 @@ model Qwen2 {
             q = permute(qCur, 0, 2, 1, 3)
             v = permute(v, 0, 2, 1, 3)
 
-            # calculate attention scores
+            # compute attention scores
             kq = mul_mat(k, q)
             kq = soft_max(kq, kq_mask, 1.0/sqrt(params.model.n_embd_head_v))
 
+            # attention output
             kqv = mul_mat(v, kq)
             kqv = permute(kqv, 0, 2, 1, 3)
             kqv = cont_2d(kqv, params.model.n_embd_head_v * params.model.n_head, params.batch.n_tokens)
 
             attention = mul_mat(blk.%d.attn_output.weight, kqv)
 
-            # fully connected
-            ffn_inp = add(self_attention_input, attention)
+            # add attention to input
+            ffn_input = add(self_attention_input, attention)
 
-            # ffn norm
-            cur = mul(rms_norm(ffn_inp, params.model.f_norm_rms_eps), blk.%d.ffn_norm.weight)
+            # layer norm before FFN
+            cur = mul(rms_norm(ffn_input, params.model.f_norm_rms_eps), blk.%d.ffn_norm.weight)
 
-            # up * silu(gate) * down + residual
-            tmp = mul_mat(blk.%d.ffn_up.weight, cur)
-            cur = mul_mat(blk.%d.ffn_gate.weight, cur)
-            cur = silu(cur)
-            cur = mul(cur, tmp)
-            cur = mul_mat(blk.%d.ffn_down.weight, cur)
-            layer_input = add(ffn_inp, cur)
+            # feed forward network with swiglu
+            up = mul_mat(blk.%d.ffn_up.weight, cur)
+
+            x0 = silu(cont(view_2d(up, 
+                params.model.n_ffn, params.batch.n_tokens, # shape
+                params.model.n_ffn * element_size(up) * 2, # second dimension stride
+                0 # offset
+            )))
+            x1 = cont(view_2d(up, 
+                params.model.n_ffn, params.batch.n_tokens, # shape
+                params.model.n_ffn * element_size(up) * 2, # second dimension stride
+                params.model.n_ffn * element_size(up) # offset
+            ))
+
+            act = mul(x0, x1)
+            down = mul_mat(blk.%d.ffn_down.weight, act)
+
+            # residual connection
+            layer_input = add(ffn_input, down)
         }
 
-        # do final norm
+        # final layer norm
         cur = mul(rms_norm(layer_input, params.model.f_norm_rms_eps), output_norm.weight)
 
         # lm_head
-        output = mul_mat(token_embd.weight, cur)
+        output = mul_mat(output.weight, cur)
     }
 }
