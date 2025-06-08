@@ -3,7 +3,10 @@ name: Publish a Release to PyPI
 on:
   push:
     tags:
-      - 'v*.*.*'  # Trigger on semver tags
+      - 'v[0-9]+.[0-9]+.[0-9]+'  # Trigger on semver tags
+
+permissions:
+  contents: write # Required to create a release
 
 jobs:
   build:
@@ -53,7 +56,7 @@ jobs:
       uses: pypa/gh-action-pypi-publish@release/v1
 
   gh-release:
-    name: Create Release
+    name: Create GitHub Release
     needs: [ build ]
     runs-on: ubuntu-latest
 
