@@ -8,14 +8,14 @@ import ctypes
 import numpy as np
 from gguf.gguf_reader import GGUFReader
 
-from gglm.utils import Tensor, ModelParams, ContextParams, BatchParams, ParseError
-from gglm.models.parser import GGMLParser, ParseContext
-from gglm.models.ast import LoweringContext, produce_ggml_graph
-import gglm.wrapper as wrapper
+from ggraph.utils import Tensor, ModelParams, ContextParams, BatchParams, ParseError
+from ggraph.lang.parser import GGMLParser, ParseContext
+from ggraph.lang.ast import LoweringContext, produce_ggml_graph
+import ggraph.wrapper as wrapper
 
 # from exo.inference.shard import Shard
 
-wrapper.ggml_backend_dev_type
+logger = logging.getLogger(__name__)
 
 class GGMLBackendType(enum.Enum):
     CPU = enum.auto()
@@ -76,7 +76,7 @@ class GGMLModel:
 
         arch = str(gguf_kv["general.architecture"].contents())
         try:
-            self.parse_context = GGMLParser().parse(os.path.join(os.path.dirname(__file__), f"{arch}.ggml"), self.context_params, self.model_params)
+            self.parse_context = GGMLParser().parse(os.path.join(os.path.dirname(__file__), f"{arch}.ggraph"), self.context_params, self.model_params)
         except ParseError as exception:
             raise RuntimeError("Failed to parse") from exception
         
@@ -113,7 +113,7 @@ class GGMLModel:
             raise RuntimeError("Failed to initialize backend!")
         
         if self.backend_type == GGMLBackendType.CPU:
-            logging.debug(f"Using {self.context_params.n_threads} threads for computation")
+            logger.debug(f"Using {self.context_params.n_threads} threads for computation")
             wrapper.ggml_backend_cpu_set_n_threads(self.backend, self.context_params.n_threads)
 
         backend_buffer_type = wrapper.ggml_backend_get_default_buffer_type(self.backend)
@@ -125,7 +125,7 @@ class GGMLModel:
             raise RuntimeError("Failed to create new graph memory allocator!")
 
     def _load_model(self) -> wrapper.GGMLContext:
-        logging.info("Loading tensors...")
+        logger.info("Loading tensors...")
         gguf_context = wrapper.GGMLContext(max_tensors=len(self.reader.tensors))
         tensors_and_data: list[tuple[Tensor, np.ndarray]] = []
         for t in self.reader.tensors:
@@ -135,10 +135,10 @@ class GGMLModel:
             self.gguf_tensors[tensor.name] = tensor
 
         self.model_buffer = wrapper.ggml_backend_alloc_ctx_tensors(gguf_context.ctx, self.backend)
-        logging.info(f"Allocated {self.model_buffer.contents.size/1024.0/1024.0:.2f} MB for gguf tensors")
+        logger.info(f"Allocated {self.model_buffer.contents.size/1024.0/1024.0:.2f} MB for gguf tensors")
 
         for tensor, np_tensor in tensors_and_data:
-            logging.debug(f"Loading Tensor - name: {tensor.name}, shape: {tensor.shape}, type: {tensor.ptr.contents.type}")
+            logger.debug(f"Loading Tensor - name: {tensor.name}, shape: {tensor.shape}, type: {tensor.ptr.contents.type}")
             tensor.data = np_tensor
         
         return gguf_context
@@ -161,7 +161,7 @@ class GGMLModel:
         for tensor in self.io_tensors.values():
             wrapper.ggml_set_zero(tensor.ptr)
 
-        logging.info(f"Allocated {self.inputs_buffer.contents.size/1024.0/1024.0:.2f} MB for input tensors")
+        logger.info(f"Allocated {self.inputs_buffer.contents.size/1024.0/1024.0:.2f} MB for input tensors")
 
         return io_ctx
 
@@ -171,13 +171,13 @@ class GGMLModel:
         # Set up compute graph
         graph_size = (len(self.gguf_tensors) + len(self.lowering_context.graph)) * 5
 
-        logging.debug(f"Creating GGML graph with {graph_size} nodes...")
+        logger.debug(f"Creating GGML graph with {graph_size} nodes...")
         compute_ctx = wrapper.GGMLContext(max_tensors=graph_size, graph_size=graph_size)
         gf = wrapper.ggml_new_graph_custom(compute_ctx.ctx, graph_size, False)
 
         try:
             for node in self.parse_context.ast:
-                produce_ggml_graph(self.lowering_context, compute_ctx.ctx, gf, node)
+                produce_ggml_graph(self.lowering_context, compute_ctx.ctx, gf, node, debug_calls=False)
         except ParseError as exception:
             raise RuntimeError("Failed to parse") from exception
 
@@ -187,7 +187,7 @@ class GGMLModel:
         
         wrapper.ggml_set_name(output_tensor.ptr, b"result_output")
         
-        logging.debug("Expanding graph...")
+        logger.debug("Expanding graph...")
         wrapper.ggml_build_forward_expand(gf, output_tensor.ptr)
         # wrapper.ggml_graph_dump_dot(gf, ctypes.POINTER(wrapper.ggml_cgraph)(), b"graph.dot")
 

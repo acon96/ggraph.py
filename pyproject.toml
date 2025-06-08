@@ -1,23 +1,32 @@
-
 [build-system]
-requires = ["setuptools>=61.0"]
+requires = ["setuptools>=61.0",  "setuptools-scm>=8"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "ggraph"
-version = "0.1.0"
-description = "Python interface and utilities for GGML-based model inference, with support for custom model graphs and backends."
+description = "Python interface engine and graph definition language for GGUF-based models."
 authors = [
     { name = "Alex O'Connell", email = "git@alexoconnell.net" }
 ]
-license = { text = "MIT" }
+license = "MIT"
 readme = "README.md"
 requires-python = ">=3.8"
 dependencies = [
-    "numpy",
-    "transformers",
-    "lark",
-    "matplotlib"
+    "numpy>=2.2.6",
+    "tokenizers>=0.21.1",
+    "jinja2>=3.1.6",
+    "lark>=1.2.2",
+    "matplotlib",
+    "gguf>=0.17.0",
+]
+dynamic = ["version"]
+
+[tool.setuptools_scm]
+
+[project.optional-dependencies]
+gen = [
+    "ctypeslib2-ggml==0.0.1",
+    "clang==14"
 ]
 
 [project.urls]
@@ -25,5 +34,11 @@ Homepage = "https://github.com/acon96/ggraph.py"
 Repository = "https://github.com/acon96/ggraph.py"
 
 [tool.setuptools.packages.find]
-where = ["gglm"]
-include = ["gglm*"]
+where = ["."]
+include = ["ggraph*"]
+
+[tool.setuptools.package-data]
+ggraph = ["*.ggraph"]
+
+[project.scripts]
+ggraph-cli = "ggraph.cli:main"
