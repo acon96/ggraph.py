@@ -1,6 +1,6 @@
 
 from __future__ import annotations
-from typing import Optional, Dict, List, Union, TypeAlias, Any, TypeVar, Mapping
+from typing import Optional, Dict, List, Union, TypeAlias, Any, TypeVar, Mapping, Tuple
 from dataclasses import dataclass, field
 from functools import cache, cached_property
 from datetime import datetime
@@ -17,8 +17,7 @@ import numpy as np
 from gguf.gguf_reader import ReaderField, ReaderTensor
 from gguf.constants import Keys as GGUFKeys, RopeScalingType, TokenType
 from tokenizers import Tokenizer, Regex, SplitDelimiterBehavior, Encoding, AddedToken
-from tokenizers.implementations import ByteLevelBPETokenizer, SentencePieceUnigramTokenizer
-from tokenizers.pre_tokenizers import PreTokenizer, Split, Sequence
+from tokenizers import pre_tokenizers, decoders, processors, normalizers, models
 
 from ggraph.wrapper import Tensor
 from ggraph.wrapper.gen import LLAMA_ROPE_SCALING_TYPE_NONE, LLAMA_ROPE_SCALING_TYPE_LINEAR, LLAMA_ROPE_SCALING_TYPE_YARN, LLAMA_ROPE_SCALING_TYPE_LONGROPE, LLAMA_ROPE_SCALING_TYPE_UNSPECIFIED
@@ -78,21 +77,21 @@ class BatchParams:
 
 GraphArg: TypeAlias = Union[Tensor, int, str]
 
-def build_pre_tokenizer_patterns(patterns: Dict[str, List[str]], aliases: Dict[str, str]) -> Mapping[str, PreTokenizer]:
+def build_pre_tokenizer_patterns(patterns: Dict[str, List[str]], aliases: Dict[str, str]) -> Mapping[str, pre_tokenizers.PreTokenizer]:
     """
     Builds a dictionary of pre-tokenizer patterns from a dictionary of string patterns.
     """
-    pre_tokenizers = {
-        key: Sequence([
-            Split(pattern=Regex(pattern), behavior=SplitDelimiterBehavior.ISOLATED.value) for pattern in patterns
-        ]) for key, patterns in patterns.items()
+    result = {
+        key: pre_tokenizers.Sequence([
+            pre_tokenizers.Split(pattern=Regex(pattern), behavior=SplitDelimiterBehavior.ISOLATED.value) for pattern in patterns
+        ] + [pre_tokenizers.ByteLevel()]) for key, patterns in patterns.items()
     }
     # Add aliases to the base patterns
     for alias, base in aliases.items():
-        if alias in pre_tokenizers:
+        if alias in result:
             raise ValueError(f"Alias '{alias}' conflicts with an existing pattern.")
-        pre_tokenizers[alias] = pre_tokenizers[base]
-    return pre_tokenizers
+        result[alias] = result[base]
+    return result
 
 PRE_TOKENIZER_PATTERNS = build_pre_tokenizer_patterns(
     {
@@ -111,6 +110,41 @@ PRE_TOKENIZER_PATTERNS = build_pre_tokenizer_patterns(
         "llama-bpe": "llama3",
     }
 )
+
+def ggml_bpe_tokenizer(
+    vocab: Union[str, Dict[str, int]],
+    merges: Union[str, List[Tuple[str, str]]],
+    pre_tokenizer: str = "default",
+) -> Tokenizer:
+    """Creates a Byte-level BPE tokenizer similar to the GPT-2 tokenizer"""
+    tokenizer = Tokenizer(models.BPE(vocab, merges))
+
+    tokenizer.pre_tokenizer = PRE_TOKENIZER_PATTERNS.get(pre_tokenizer, PRE_TOKENIZER_PATTERNS["default"])
+    tokenizer.decoder = decoders.ByteLevel()
+    tokenizer.post_processor = processors.ByteLevel()
+
+    return tokenizer
+
+def ggml_spm_tokenizer(
+    vocab: Union[str, Dict[str, int]],
+    merges: Union[str, List[Tuple[str, str]]]
+) -> Tokenizer:
+    """Creates a SentencePiece BPE tokenizer with byte fallback similar to the Llama tokenizer"""
+    tokenizer = Tokenizer(models.BPE(vocab, merges, unk_token="<unk>", byte_fallback=True))
+
+    tokenizer.normalizer = normalizers.Sequence([
+        normalizers.Prepend("▁"), normalizers.Replace(" ", "▁")
+])
+    tokenizer.decoder = decoders.Sequence([
+        decoders.Replace("▁", " "), decoders.ByteFallback(), decoders.Fuse(), decoders.Strip(content=" ", left=1, right=0)
+    ])
+    tokenizer.post_processor = processors.TemplateProcessing(
+        single="<s> $A",
+        pair="<s> $A <s> $B",
+        special_tokens=[("<s>", 1)],
+    )
+
+    return tokenizer
 
 class ModelParams:
     """Provides an interface for consistently accessing model parameters from a GGUF file"""
@@ -259,9 +293,21 @@ class ModelParams:
         logger.debug("Building tokenizer...")
 
         tokenizer_type = self.get(GGUFKeys.Tokenizer.MODEL, "no_vocab")
-        pre_tokenizer = self.get(GGUFKeys.Tokenizer.PRE, None)
         token_list = self.get(GGUFKeys.Tokenizer.LIST, [])
         token_types = self.get(GGUFKeys.Tokenizer.TOKEN_TYPE, [])
+
+        if "phi-3" in self.arch.lower() or "phi3" in self.arch.lower():
+            token_overrides = {
+                "<unk>": { "rstrip": False },
+                "</s>": { "rstrip": True },
+                "<unk>": { "rstrip": False },
+                "<s>": { "rstrip": False },
+                "<|endoftext|>": { "rstrip": False },
+            }
+            rstrip_special_tokens = True
+        else:
+            token_overrides = {}
+            rstrip_special_tokens = False
 
         base_tokens = {}
         added_tokens = []
@@ -271,15 +317,18 @@ class ModelParams:
                 base_tokens[token] = idx
             elif token_type == TokenType.USER_DEFINED or token_type == TokenType.CONTROL:
                 add_to = special_tokens if token_type == TokenType.CONTROL else added_tokens
-                add_to.append(AddedToken(content=token, lstrip=False, rstrip=False, normalized=False, special=token_type == TokenType.CONTROL))
+                is_special_token = token_type == TokenType.CONTROL
+                token_kwargs = dict(lstrip=False, rstrip=rstrip_special_tokens and is_special_token, normalized=False, special=is_special_token)
+                token_kwargs.update(token_overrides.get(token, {}))
+                add_to.append(AddedToken(content=token, **token_kwargs))
             
         merges = [ tuple(merge.split(" ")) for merge in self.get(GGUFKeys.Tokenizer.MERGES, []) if len(merge.split(" ")) == 2]
 
         if tokenizer_type == "gpt2":
-            tokenizer = ByteLevelBPETokenizer(vocab=base_tokens, merges=merges)
-            # tokenizer.pre_tokenizer = PRE_TOKENIZER_PATTERNS.get(pre_tokenizer, PRE_TOKENIZER_PATTERNS["default"])
+            pre_tokenizer = self.get(GGUFKeys.Tokenizer.PRE, None)
+            tokenizer = ggml_bpe_tokenizer(vocab=base_tokens, merges=merges, pre_tokenizer=pre_tokenizer)
         elif tokenizer_type == "llama":
-            tokenizer = SentencePieceUnigramTokenizer(vocab=list(base_tokens.items()))
+            tokenizer = ggml_spm_tokenizer(vocab=base_tokens, merges=merges)
         # elif tokenizer_type == "bert":
         #     tokenizer = Tokenizer(WordPiece(vocab=base_tokens, unk_token=unk_token, max_input_chars_per_word=100))
         # elif tokenizer_type == "t5":
