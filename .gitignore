@@ -5,3 +5,7 @@ __pycache__
 *.egg-info
 *.code-workspace
 .vscode/
+ggraph/__version__.py
+*.so
+*.dll
+*.dylib

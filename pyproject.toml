@@ -1,6 +1,6 @@
 [build-system]
-requires = ["setuptools>=61.0",  "setuptools-scm>=8"]
-build-backend = "setuptools.build_meta"
+requires = ["scikit-build-core"]
+build-backend = "scikit_build_core.build"
 
 [project]
 name = "ggraph"
@@ -21,8 +21,6 @@ dependencies = [
 ]
 dynamic = ["version"]
 
-[tool.setuptools_scm]
-
 [project.optional-dependencies]
 gen = [
     "ctypeslib2-ggml==0.0.1",
@@ -33,12 +31,16 @@ gen = [
 Homepage = "https://github.com/acon96/ggraph.py"
 Repository = "https://github.com/acon96/ggraph.py"
 
-[tool.setuptools.packages.find]
-where = ["."]
-include = ["ggraph*"]
+[tool.scikit-build]
+wheel.packages = ["ggraph"]
+cmake.verbose = true
+cmake.minimum-version = "3.21"
+minimum-version = "0.5.1"
+sdist.include = [".git", "vendor/llama.cpp/*", "*.ggraph", "ggraph/__version__.py"]
+metadata.version.provider = "scikit_build_core.metadata.setuptools_scm"
 
-[tool.setuptools.package-data]
-ggraph = ["*.ggraph"]
+[tool.setuptools_scm]
+write_to = "ggraph/__version__.py"
 
 [project.scripts]
 ggraph-cli = "ggraph.cli:main"

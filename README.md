@@ -14,7 +14,7 @@ Install the package from PyPI:
 pip install ggraph
 ```
 
-You may also need to install system dependencies for the GGML backend (see [llama.cpp](https://github.com/ggml-org/llama.cpp) for details).
+The package will attempt to build an optimized version of the GGML Library based on your current system for CPU inference. It will also attempt to auto detect supported backends such as CUDA or Metal and build them if the appropriate toolkits are available.
 
 ## Usage Example
 
@@ -53,10 +53,11 @@ ggraph-cli -m "./models/Qwen2.5-0.5B-Instruct-Q6_K.gguf" --n_ctx 1024 --n_predic
 ## Project Structure
 
 - `ggraph/` - Core Python package
+  - `cli.py` - entrypoint for cli inference
   - `inference_engine.py` - Main inference logic
-  - `sharded_inference_engine.py` - Sharded inference support
   - `models/` - Model graph definitions and utilities
   - `wrapper/` - Low-level bindings to GGML C/C++ libraries
+  - `lang/` - Parser and AST for GGraph files
 - `scripts/` - Helper scripts for configuration and binding generation
 
 ## License
